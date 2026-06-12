@@ -380,7 +380,7 @@ def admin():
             if gols_t1 is not None and gols_t2 is not None and gols_t1.strip() != '' and gols_t2.strip() != '':
                 query_end = preparar_query('''
                     UPDATE jogos 
-                    SET gols_time1_real = ?, gols_time2_real = ?, status = "Encerrado" 
+                    SET gols_time1_real = ?, gols_time2_real = ?, status = 'Encerrado' 
                     WHERE jogo_id = ?
                 ''')
                 cursor.execute(query_end, (int(gols_t1), int(gols_t2), jogo_id))
