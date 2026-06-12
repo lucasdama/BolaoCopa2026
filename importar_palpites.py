@@ -41,24 +41,13 @@ def importar_palpites_csv(caminho_csv):
                 );
             ''')
             cursor.execute('''
-                CREATE TABLE IF NOT EXISTS templates_palpites (
-                    id SERIAL PRIMARY KEY,
-                    usuario_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
-                    jogo_id TEXT NOT NULL,
-                    gols_time1 INTEGER NOT NULL,
-                    gols_time2 INTEGER NOT NULL,
-                    CONSTRAINT unico_palpite_por_jogo UNIQUE (usuario_id, jogo_id)
-                );
-            ''')
-            # Fallback temporário para garantir compatibilidade caso sua tabela se chame 'palpites'
-            cursor.execute('''
                 CREATE TABLE IF NOT EXISTS palpites (
                     id SERIAL PRIMARY KEY,
                     usuario_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
                     jogo_id TEXT NOT NULL,
                     gols_time1 INTEGER NOT NULL,
                     gols_time2 INTEGER NOT NULL,
-                    CONSTRAINT unico_palpite_real UNIQUE (usuario_id, jogo_id)
+                    CONSTRAINT unico_palpite_por_jogo UNIQUE (usuario_id, jogo_id)
                 );
             ''')
         else:
@@ -104,9 +93,9 @@ def importar_palpites_csv(caminho_csv):
             
             for index, linha in enumerate(leitor, start=2):
                 nome_usuario = linha.get('usuarios') or linha.get('usuario')
-                id_puro = inline_id = linha.get('match_number') or linha.get('match')
+                id_puro = linha.get('match_number') or linha.get('match')
                 gols_t1 = linha.get('gols_time1_palpite') or linha.get('gols_time1')
-                gols_t2 = linha.get('gols_time2_palpite') or inline_gols = linha.get('gols_time2')
+                gols_t2 = linha.get('gols_time2_palpite') or linha.get('gols_time2')
                 
                 if not nome_usuario or not id_puro:
                     continue
