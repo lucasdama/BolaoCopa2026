@@ -3,14 +3,24 @@ import sqlite3
 from datetime import datetime, timedelta
 from pontuacao import calcular_pontos
 from werkzeug.security import generate_password_hash, check_password_hash
+import psycopg2
+from psycopg2.extras import DictCursor  
 
 app = Flask(__name__)
 app.secret_key = 'chave_secreta_copa_2026_super_protegida'
 
 def obter_conexao_db():
-    conn = sqlite3.connect('bolao.db')
-    conn.row_factory = sqlite3.Row
-    return conn
+    url_banco = os.environ.get('DATABASE_URL')
+    
+    if url_banco:
+        # CONEXÃO PRODUÇÃO (POSTGRESQL NA RENDER)
+        conn = psycopg2.connect(url_banco)
+        return conn
+    else:
+        # CONEXÃO LOCAL (SQLITE NO SEU PC)
+        conn = obter_conexao()
+        conn.row_factory = sqlite3.Row
+        return conn
 
 def inicializar_db():
     conn = obter_conexao_db()
@@ -108,7 +118,7 @@ def palpites():
         return redirect(url_for('login'))
         
     usuario_id = session['usuario_id']
-    conn = sqlite3.connect('bolao.db')
+    conn = obter_conexao()
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
 
