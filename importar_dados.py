@@ -20,7 +20,6 @@ def importar_csv_para_banco():
     conn, is_postgres = obter_conexao()
     cursor = conn.cursor()
     
-    # Define o placeholder correto (?, ?, ?) para SQLite e (%s, %s, %s) para Postgres
     placeholder = '%s' if is_postgres else '?'
     
     print(f"⏳ Conectado ao banco de dados ({'PostgreSQL' if is_postgres else 'SQLite'}). Lendo arquivos CSV...")
@@ -34,24 +33,42 @@ def importar_csv_para_banco():
         conn.close()
         return
 
+    print("🧼 Limpando e padronizando chaves de cruzamento...")
+    # Remove espaços invisíveis dos nomes das colunas
+    df_partidas.columns = df_partidas.columns.str.strip()
+    df_times.columns = df_times.columns.str.strip()
+    df_estagios.columns = df_estagios.columns.str.strip()
+    df_cities.columns = df_cities.columns.str.strip()
+
+    # Força a conversão das colunas de ID para String tirando valores nulos ou flutuantes (ex: 1.0 -> 1)
+    for col in ['home_team_id', 'away_team_id', 'stage_id', 'city_id']:
+        df_partidas[col] = df_partidas[col].fillna(0).astype(float).astype(int).astype(str)
+        
+    df_times['id'] = df_times['id'].fillna(0).astype(float).astype(int).astype(str)
+    df_estagios['id'] = df_estagios['id'].fillna(0).astype(float).astype(int).astype(str)
+    df_cities['id'] = df_cities['id'].fillna(0).astype(float).astype(int).astype(str)
+
     print("🧠 Cruzando os dados dos arquivos incluindo os Códigos FIFA...")
     
+    # 1. Cruzar o Time da Casa
     df_juntos = pd.merge(df_partidas, df_times[['id', 'team_name', 'flag_code']], left_on='home_team_id', right_on='id', how='left')
     df_juntos = df_juntos.rename(columns={'team_name': 'time1', 'flag_code': 'flag_code_time1'}).drop(columns=['id_y'])
 
+    # 2. Cruzar o Time Visitante
     df_juntos = pd.merge(df_juntos, df_times[['id', 'team_name', 'flag_code']], left_on='away_team_id', right_on='id', how='left')
     df_juntos = df_juntos.rename(columns={'team_name': 'time2', 'flag_code': 'flag_code_time2'}).drop(columns=['id'])
 
+    # 3. Cruzar a Etapa da Copa
     df_juntos = pd.merge(df_juntos, df_estagios[['id', 'stage_name']], left_on='stage_id', right_on='id', how='left')
     df_juntos = df_juntos.rename(columns={'stage_name': 'etapa'}).drop(columns=['id'])
 
+    # 4. Cruzar a Cidade Sede
     df_juntos = pd.merge(df_juntos, df_cities[['id', 'city_name']], left_on='city_id', right_on='id', how='left')
     df_juntos = df_juntos.rename(columns={'city_name': 'cidade'}).drop(columns=['id'])
 
     print("🛠️ Reiniciando a tabela de jogos com suporte a bandeiras...")
-    cursor.execute('DROP TABLE IF EXISTS jogos;')
+    cursor.execute('DROP TABLE IF EXISTS jogos CASCADE;') # Adicionado CASCADE para limpar dependências se houver no Postgres
     
-    # Tipo SERIAL para chave primária automática não é usado aqui pois jogo_id é TEXT
     cursor.execute('''
         CREATE TABLE jogos (
             jogo_id TEXT PRIMARY KEY,
@@ -74,8 +91,8 @@ def importar_csv_para_banco():
         t1 = str(linha['time1']) if pd.notna(linha['time1']) else "A definir"
         t2 = str(linha['time2']) if pd.notna(linha['time2']) else "A definir"
         
-        code1 = str(linha['flag_code_time1']) if pd.notna(linha['flag_code_time1']) else 'un'
-        code2 = str(linha['flag_code_time2']) if pd.notna(linha['flag_code_time2']) else 'un'
+        code1 = str(linha['flag_code_time1']).strip().lower() if pd.notna(linha['flag_code_time1']) else 'un'
+        code2 = str(linha['flag_code_time2']).strip().lower() if pd.notna(linha['flag_code_time2']) else 'un'
         
         etapa_nome = str(linha['etapa']) if pd.notna(linha['etapa']) else "Fase de Grupos"
         cidade_nome = str(linha['cidade']) if pd.notna(linha['cidade']) else "A definir"
@@ -83,7 +100,6 @@ def importar_csv_para_banco():
         jogo_id = f"Jogo_{linha['match_number']}"
         data_hora = str(linha['kickoff_at'])
         
-        # SQL adaptável para evitar erros de duplicidade (IGNORE no SQLite / ON CONFLICT no Postgres)
         if is_postgres:
             query = f'''
                 INSERT INTO jogos (jogo_id, time1, time2, flag_code_time1, flag_code_time2, etapa, data_hora, status, cidade)
