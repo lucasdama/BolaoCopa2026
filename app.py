@@ -125,6 +125,11 @@ def palpites():
                 # Validação estrita: só grava se o usuário digitou ambos os campos
                 if gols_t1 != '' and gols_t2 != '' and gols_t1 is not None and gols_t2 is not None:
                     try:
+                        # 🚨 NOVA DEFESA ANTI-NEGATIVOS: ignora ou barra se menor que zero
+                        if int(gols_t1) < 0 or int(gols_t2) < 0:
+                            print(f"⚠️ Tentativa de palpite negativo ignorada para o jogo {jogo_id}")
+                            continue # Pula este jogo e não salva nada incorreto
+
                         cursor.execute('SELECT 1 FROM palpites WHERE usuario_id = ? AND jogo_id = ?', (usuario_id, jogo_id))
                         existe = cursor.fetchone()
 

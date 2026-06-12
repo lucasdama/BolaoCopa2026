@@ -287,9 +287,9 @@
                     </div>
 
                     <div class="placar-inputs">
-                        <input type="number" name="gols1_{{ jogo['jogo_id'] }}" value="{{ jogo['gols_time1_palpite'] if jogo['gols_time1_palpite'] is not none and jogo['gols_time1_palpite'] != '' else '' }}" pattern="\d*" {{ 'disabled' if jogo['status'] != 'Pendente' }}>
+                        <input type="number" name="gols1_{{ jogo['jogo_id'] }}" value="{{ jogo['gols_time1_palpite'] if jogo['gols_time1_palpite'] is not none and jogo['gols_time1_palpite'] != '' else '' }}" min="0" pattern="\d*" {{ 'disabled' if jogo['status'] != 'Pendente' }}>
                         <span class="divisor-x">x</span>
-                        <input type="number" name="gols2_{{ jogo['jogo_id'] }}" value="{{ jogo['gols_time2_palpite'] if jogo['gols_time2_palpite'] is not none and jogo['gols_time2_palpite'] != '' else '' }}" pattern="\d*" {{ 'disabled' if jogo['status'] != 'Pendente' }}>
+                        <input type="number" name="gols2_{{ jogo['jogo_id'] }}" value="{{ jogo['gols_time2_palpite'] if jogo['gols_time2_palpite'] is not none and jogo['gols_time2_palpite'] != '' else '' }}" min="0" pattern="\d*" {{ 'disabled' if jogo['status'] != 'Pendente' }}>
                     </div>
 
                     <div class="time-bloco visitante">
