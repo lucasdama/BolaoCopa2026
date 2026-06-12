@@ -366,7 +366,7 @@ def admin():
         print(f"Jogo ID: {jogo_id} | Ação clicada: {acao}")
         
         if acao == 'iniciar':
-            query_init = preparar_query('UPDATE jogos SET status = "Em Andamento" WHERE jogo_id = ?')
+            query_init = preparar_query("UPDATE jogos SET status = 'Em Andamento' WHERE jogo_id = ?")
             cursor.execute(query_init, (jogo_id,))
             print(f"🏃 Partida {jogo_id} alterada para 'Em Andamento'.")
             flash('Partida iniciada! Palpites trancados.')
