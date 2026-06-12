@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Palpites de {{ nome_amigo }} - Bolão</title>
+    <style>
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
+            background-color: #f3f4f6; 
+            color: #1f2937; 
+            max-width: 600px; 
+            margin: 0 auto; 
+            padding: 16px; 
+        }
+
+        .voltar { 
+            display: inline-flex; 
+            align-items: center; 
+            gap: 6px; 
+            margin-bottom: 20px; 
+            color: #2b7a78; 
+            text-decoration: none; 
+            font-weight: 700; 
+            font-size: 14px;
+            transition: color 0.2s;
+        }
+        .voltar:hover { color: #3aafa9; }
+
+        h2 { font-weight: 800; color: #111827; letter-spacing: -0.5px; margin-top: 0; margin-bottom: 6px; }
+        .subtitulo { color: #4b5563; font-size: 14px; margin-bottom: 25px; line-height: 1.4; }
+
+        /* 📁 SANFONAS DA COPA (IGUAL À TELA DE PALPITES) */
+        details { 
+            background: white; 
+            margin-bottom: 16px; 
+            border-radius: 16px; 
+            box-shadow: 0 4px 12px rgba(0,0,0,0.03); 
+            overflow: hidden; 
+            border: 1px solid #e5e7eb; 
+        }
+        
+        summary { 
+            background: #ffffff; 
+            color: #111827; 
+            padding: 18px; 
+            font-size: 15px; 
+            font-weight: 800; 
+            cursor: pointer; 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            user-select: none;
+            border-bottom: 1px solid transparent;
+        }
+        
+        details[open] summary { 
+            border-bottom-color: #f3f4f6; 
+            background: #f9fafb;
+        }
+
+        .conteudo-etapa { padding: 16px; background: #ffffff; }
+
+        /* ⚽ CARDS DOS CONFRONTOS */
+        .jogo-card { 
+            background: #ffffff; 
+            padding: 16px; 
+            border-radius: 12px; 
+            margin-bottom: 16px; 
+            border: 1px solid #e5e7eb; 
+            box-shadow: 0 2px 6px rgba(0,0,0,0.01);
+        }
+        .jogo-card:last-child { margin-bottom: 0; }
+
+        .info-jogo { 
+            color: #6b7280; 
+            font-size: 12px; 
+            font-weight: 600;
+            margin-bottom: 14px; 
+            display: flex;
+            justify-content: space-between;
+            border-bottom: 1px dashed #f3f4f6; 
+            padding-bottom: 6px; 
+        }
+
+        /* 🏢 ESTRUTURA DO PLACAR */
+        .placar-container { 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            margin: 18px 0; 
+        }
+
+        .equipe-bloco { 
+            flex: 1; 
+            display: flex; 
+            align-items: center; 
+            gap: 10px; 
+            font-size: 15px; 
+            font-weight: 700; 
+            color: #111827;
+        }
+        .equipe-bloco.time1 { justify-content: flex-end; text-align: right; }
+        .equipe-bloco.time2 { justify-content: flex-start; text-align: left; }
+
+        /* Escudos Circulares Fake */
+        .escudo-fake {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: #f3f4f6;
+            border: 1px solid #e5e7eb;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+        }
+
+        .inputs-area { 
+            display: flex; 
+            align-items: center; 
+            gap: 8px; 
+            padding: 0 12px;
+        }
+
+        /* Inputs estilizados idênticos aos originais, mas travados */
+        .input-gols { 
+            background: #f3f4f6; 
+            color: #111827;
+            border: 1px solid #e5e7eb;
+            width: 44px; 
+            height: 40px; 
+            border-radius: 8px; 
+            text-align: center; 
+            font-size: 16px; 
+            font-weight: 700;
+            -moz-appearance: textfield;
+        }
+        .input-gols::-webkit-outer-spin-button,
+        .input-gols::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+
+        .divisor-x { color: #9ca3af; font-weight: 600; font-size: 14px; }
+        .sem-palpite { color: #9ca3af; font-size: 13px; font-style: italic; font-weight: 500; }
+
+        /* 📊 PAINEL DE RESULTADOS E BADGES PREMIUM */
+        .resultado-real-tag { 
+            text-align: center; 
+            background: #f3f4f6; 
+            color: #374151;
+            padding: 6px; 
+            border-radius: 8px; 
+            font-size: 12px; 
+            margin-bottom: 12px; 
+            font-weight: 700;
+            border: 1px solid #e5e7eb;
+        }
+
+        .rodape-feedback {
+            border-top: 1px dashed #e5e7eb; 
+            padding-top: 12px; 
+            margin-top: 12px;
+        }
+
+        .total-faturado-tag { 
+            font-size: 13px; 
+            font-weight: 800; 
+            color: #2b7a78; 
+            margin-bottom: 10px; 
+            display: block; 
+        }
+
+        .container-badges-pontos {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        /* Emblemas de pontuação baseados na tela principal */
+        .badge-bonus {
+            font-size: 11px;
+            font-weight: 700;
+            padding: 4px 10px;
+            border-radius: 6px;
+            color: white;
+            display: inline-flex;
+            align-items: center;
+        }
+        
+        .badge-sucesso { background-color: #10b981; } /* Verde */
+        .badge-erro { background-color: #ef4444; }    /* Vermelho */
+
+    </style>
+</head>
+<body>
+
+    <a href="/ranking" class="voltar">⬅ Voltar para o Ranking</a>
+    <h2>Espiando os palpites de: <span style="color: #2b7a78;">{{ nome_amigo }}</span></h2>
+    <p class="subtitulo">Por segurança e integridade do bolão, confrontos que ainda estão abertos para alterações não são listados.</p>
+
+    {# 🫙 VERIFICAÇÃO DE DADOS VAZIOS #}
+    {% if jogos_agrupados|length == 0 or jogos_agrupados.values()|map('length')|sum == 0 %}
+        <p style="text-align: center; color: #9ca3af; margin-top: 40px; font-style: italic; font-size: 14px;">Nenhum jogo trancado ou encerrado até o momento.</p>
+    {% endif %}
+
+    {# 📁 LOOP DAS SANFONAS #}
+    {% for etapa, lista_jogos in jogos_agrupados.items() %}
+    {% if lista_jogos|length > 0 %}
+    <details open>
+        <summary>📁 {{ etapa }}</summary>
+        <div class="conteudo-etapa">
+            
+            {# ⚽ CARDS DOS CONFRONTOS #}
+            {% for jogo in lista_jogos %}
+            <div class="jogo-card">
+                <div class="info-jogo">
+                    <span>📅 {{ jogo['data_hora'] }}</span>
+                    <span>📍 {{ jogo['cidade'] }}</span>
+                </div>
+                
+                {# SE O JOGO ACABOU, MOSTRA O PLACAR REAL NO ESTILO ATUAL #}
+                {% if jogo['status'] == 'Encerrado' %}
+                    <div class="resultado-real-tag">Placar Oficial: {{ jogo['gols_time1_real'] }} X {{ jogo['gols_time2_real'] }}</div>
+                {% endif %}
+
+                <div class="placar-container">
+                    <div class="equipe-bloco time1">
+                        <span>{{ jogo['time1'] }}</span>
+                        <div class="escudo-fake">⚽</div>
+                    </div>
+                    
+                    <div class="inputs-area">
+                        {% if jogo['gols_time1_palpite'] is not none and jogo['gols_time1_palpite'] != '' %}
+                            <input type="text" class="input-gols" value="{{ jogo['gols_time1_palpite'] }}" disabled>
+                            <span class="divisor-x">x</span>
+                            <input type="text" class="input-gols" value="{{ jogo['gols_time2_palpite'] }}" disabled>
+                        {% else %}
+                            <span class="sem-palpite">(Sem palpite)</span>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="equipe-bloco time2">
+                        <div class="escudo-fake">⚽</div>
+                        <span>{{ jogo['time2'] }}</span>
+                    </div>
+                </div>
+
+                {# 🧠 PAINEL DINÂMICO DE CRITÉRIOS ACESSADO POR DICTIONARY #}
+                {% if jogo['status'] == 'Encerrado' and jogo['gols_time1_palpite'] is not none and jogo['gols_time1_palpite'] != '' %}
+                <div class="rodape-feedback">
+                    <span class="total-faturado-tag">💰 Pontos Conquistados: +{{ jogo['pontos_faturados'] }} pts</span>
+                    
+                    <div class="container-badges-pontos">
+                        <span class="badge-bonus {{ 'badge-sucesso' if jogo['acertou_placar'] else 'badge-erro' }}">
+                            🎯 Placar exato (+10)
+                        </span>
+                        
+                        <span class="badge-bonus {{ 'badge-sucesso' if jogo['acertou_vencedor'] or jogo['acertou_placar'] else 'badge-erro' }}">
+                            ✅ Vencedor/Empate (+5)
+                        </span>
+                        
+                        <span class="badge-bonus {{ 'badge-sucesso' if jogo['bonus_saldo'] else 'badge-erro' }}">
+                            📊 Saldo de gols (+2)
+                        </span>
+                        
+                        <span class="badge-bonus {{ 'badge-sucesso' if jogo['bonus_gols'] else 'erro' if not jogo['bonus_gols'] else 'badge-erro' }}">
+                            ⚽ Gols de equipe (+1)
+                        </span>
+                    </div>
+                </div>
+                {% endif %}
+
+            </div>
+            {% endfor %}
+
+        </div>
+    </details>
+    {% endif %}
+    {% endfor %}
+
+</body>
+</html>

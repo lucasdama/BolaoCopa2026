@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Criar Conta - Bolão Copa 2026</title>
+    <style>
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
+            background-color: #f3f4f6; 
+            color: #1f2937; 
+            max-width: 450px; 
+            margin: 0 auto; 
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            min-height: 85vh;
+        }
+
+        .auth-container {
+            background: white;
+            padding: 30px 24px;
+            border-radius: 16px;
+            box-shadow: 0 4px 166px rgba(0,0,0,0.06);
+            border: 1px solid #e5e7eb;
+        }
+
+        h2 { font-weight: 800; color: #111827; letter-spacing: -0.5px; margin-top: 0; margin-bottom: 8px; text-align: center; }
+        .subtitulo { color: #6b7280; font-size: 14px; text-align: center; margin-bottom: 25px; }
+
+        /* 🔔 ALERTAS */
+        .alert-erro {
+            background-color: #fee2e2;
+            color: #dc2626;
+            padding: 12px;
+            border-radius: 8px;
+            font-weight: 600;
+            margin-bottom: 20px;
+            font-size: 13px;
+            border: 1px solid #fca5a5;
+            text-align: center;
+        }
+
+        /* 📝 FORMULÁRIOS */
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 13px;
+            font-weight: 700;
+            color: #4b5563;
+            margin-bottom: 6px;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 12px;
+            font-size: 15px;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            background-color: #f9fafb;
+            box-sizing: border-box;
+            transition: border-color 0.2s;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #3aafa9;
+            background-color: white;
+        }
+
+        /* 🚀 BOTÃO PRINCIPAL */
+        .btn-enviar {
+            width: 100%;
+            background: #2b7a78;
+            color: white;
+            border: none;
+            padding: 14px;
+            font-size: 15px;
+            font-weight: bold;
+            border-radius: 8px;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(43, 122, 120, 0.15);
+            margin-top: 10px;
+            transition: background 0.2s;
+        }
+
+        .btn-enviar:hover { background: #205c5a; }
+
+        .Alternar-link {
+            text-align: center;
+            margin-top: 20px;
+            font-size: 13px;
+            color: #4b5563;
+        }
+
+        .Alternar-link a {
+            color: #3aafa9;
+            text-decoration: none;
+            font-weight: 700;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="auth-container">
+        <h2>Criar Nova Conta</h2>
+        <div class="subtitulo">Escolha um usuário e senha para participar do bolão</div>
+
+        {% with msgs = get_flashed_messages() %}
+            {% if msgs %}
+                <div class="alert-erro">{{ msgs[0] }}</div>
+            {% endif %}
+        {% endwith %}
+
+        <form method="POST">
+            <div class="form-group">
+                <label for="username">Usuário / Login</label>
+                <input type="text" id="username" name="usuario_login" required placeholder="Ex: lucas_silva">
+            </div>
+
+            <div class="form-group">
+                <label for="password">Senha</label>
+                <input type="password" id="password" name="usuario_senha" required placeholder="••••••••">
+            </div>
+
+            <button type="submit" class="btn-enviar">Cadastrar Minha Conta</button>
+        </form>
+
+        <div class="Alternar-link">
+            Já tem uma conta? <a href="/">Faça login aqui</a>
+        </div>
+    </div>
+
+</body>
+</html>

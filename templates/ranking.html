@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ranking - Bolão</title>
+    <style>
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
+            background-color: #f3f4f6; 
+            color: #1f2937; 
+            max-width: 600px; 
+            margin: 0 auto; 
+            padding: 16px; 
+        }
+
+        h2 { font-weight: 800; color: #111827; letter-spacing: -0.5px; margin-top: 20px; }
+
+        /* 🗺️ MENU SUPERIOR UNIFICADO */
+        .menu {
+            display: flex;
+            background: white;
+            padding: 6px;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            margin-bottom: 25px;
+            gap: 4px;
+        }
+
+        .menu a {
+            flex: 1;
+            text-align: center;
+            padding: 10px;
+            text-decoration: none;
+            color: #4b5563;
+            font-weight: 700;
+            font-size: 14px;
+            border-radius: 8px;
+            transition: all 0.2s ease;
+        }
+
+        .menu a.active {
+            background: #3aafa9;
+            color: white;
+        }
+
+        /* 🏆 CONTAINER DO RANKING PREMIUM */
+        .ranking-container {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+            overflow: hidden;
+            border: 1px solid #e5e7eb;
+        }
+
+        .ranking-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px;
+            border-bottom: 1px solid #f3f4f6;
+            transition: background 0.2s ease;
+        }
+
+        .ranking-item:last-child { border-bottom: none; }
+
+        /* Destaque para os 3 primeiros */
+        .ranking-item.top-1 { background-color: #fef3c7; } /* Ouro */
+        .ranking-item.top-2 { background-color: #f3f4f6; } /* Prata */
+        .ranking-item.top-3 { background-color: #ffedd5; } /* Bronze */
+
+        .usuario-perfil {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex: 1; /* Garante que o link ocupe o espaço correto */
+        }
+
+        .posicao {
+            font-size: 16px;
+            font-weight: 800;
+            color: #4b5563;
+            width: 28px;
+            text-align: center;
+        }
+
+        .ranking-item.top-1 .posicao { color: #d97706; font-size: 20px; }
+
+        .nome-usuario {
+            font-size: 15px;
+            font-weight: 700;
+            color: #111827;
+        }
+
+        /* 🔎 LINK DE ESPIAR AMIGO (Novo estilo integrado) */
+        a.nome-usuario {
+            text-decoration: none;
+            color: #2b7a78; /* Tom do seu tema */
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition: color 0.15s ease;
+        }
+
+        a.nome-usuario:hover {
+            color: #3aafa9;
+            text-decoration: underline;
+        }
+
+        .pontos-bloco {
+            background: #2b7a78;
+            color: white;
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 700;
+            box-shadow: 0 2px 4px rgba(43, 122, 120, 0.2);
+        }
+
+        .ranking-item.top-1 .pontos-bloco { background: #d97706; }
+    </style>
+</head>
+<body>
+
+    <div class="menu">
+        <a href="/palpites">📝 Meus Palpites</a>
+        <a href="/ranking" class="active">🏆 Ranking</a>
+        <a href="/alterar-senha">🔑 Mudar Senha</a>
+        <a href="/logout" style="color: #ff6b6b;">🚪 Sair</a>
+    </div>
+
+    <h2>Classificação Geral</h2>
+    <p style="color: #4a5568; margin-bottom: 25px; font-size: 14px;">Acompanhe quem está dominando os palpites da Copa!</p>
+
+    <div class="ranking-container">
+        {% for usuario in usuarios_ranking %}
+        <div class="ranking-item {% if loop.index == 1 %}top-1{% elif loop.index == 2 %}top-2{% elif loop.index == 3 %}top-3{% endif %}">
+            <div class="usuario-perfil">
+                <span class="posicao">
+                    {% if loop.index == 1 %}🥇{% elif loop.index == 2 %}🥈{% elif loop.index == 3 %}🥉{% else %}{{ loop.index }}º{% endif %}
+                </span>
+                
+                {# 🔐 CONDIÇÃO SEGURO: Transforma o nome em link apenas se for um parceiro #}
+                {% if session['usuario_id'] == usuario['id'] %}
+                    <span class="nome-usuario" style="color: #111827;">{{ usuario['login'] }} (Você)</span>
+                {% else %}
+                    <a href="/palpites_amigo/{{ usuario['id'] }}" class="nome-usuario" title="Clique para espiar os palpites de {{ usuario['login'] }}">
+                        🔎 {{ usuario['login'] }}
+                    </a>
+                {% endif %}
+            </div>
+            
+            <div class="pontos-bloco">
+                {{ usuario['pontos'] }} pts
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+</body>
+</html>

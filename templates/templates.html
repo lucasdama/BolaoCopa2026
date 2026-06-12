@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Bolão Copa 2026 - Palpites</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 500px; margin: 50px auto; padding: 20px; }
+        .placar { display: flex; align-items: center; justify-content: space-between; margin: 20px 0; }
+        .placar input { width: 60px; text-align: center; padding: 5px; }
+        button { width: 100%; padding: 10px; background-color: #4CAF50; color: white; border: none; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h2>Olá, {{ usuario['nome'] }}!</h2>
+    <p>Insira seu palpite para o jogo:</p>
+    
+    <form method="POST">
+        <div class="placar">
+            <span>Time A 🇧🇷</span>
+            <input type="number" name="gols_time1" min="0" required>
+            <span>X</span>
+            <input type="number" name="gols_time2" min="0" required>
+            <span>🇺🇸 Time B</span>
+        </div>
+        <button type="submit">Salvar Palpite</button>
+    </form>
+</body>
+</html>

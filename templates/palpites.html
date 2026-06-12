@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Meus Palpites - Bolão</title>
+    <style>
+            /* 📱 BASE MODERNIZADA & RESPONSIVA */
+            body { 
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
+                background-color: #f3f4f6; 
+                color: #1f2937; 
+                max-width: 600px; 
+                margin: 0 auto; 
+                padding: 16px; 
+                padding-bottom: 100px; /* Evita que o botão salvar cubra o último jogo */
+            }
+
+            h2 { font-weight: 800; color: #111827; letter-spacing: -0.5px; margin-top: 20px; }
+
+            /* 🗺️ MENU DE NAVEGAÇÃO SUPERIOR CLEAN */
+            .menu {
+                display: flex;
+                background: white;
+                padding: 6px;
+                border-radius: 12px;
+                box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+                margin-bottom: 20px;
+                gap: 4px;
+            }
+
+            .menu a {
+                flex: 1;
+                text-align: center;
+                padding: 10px;
+                text-decoration: none;
+                color: #4b5563;
+                font-weight: 700;
+                font-size: 14px;
+                border-radius: 8px;
+                transition: all 0.2s ease;
+            }
+
+            .menu a.active {
+                background: #3aafa9;
+                color: white;
+            }
+
+            /* 🔔 ALERTAS */
+            .alert-sucesso {
+                background-color: #d1fae5;
+                color: #065f46;
+                padding: 12px 16px;
+                border-radius: 8px;
+                font-weight: 600;
+                margin-bottom: 20px;
+                font-size: 14px;
+                border: 1px solid #a7f3d0;
+            }
+
+            /* 📁 SANFONA RETRÁTIL PREMIUM */
+            details { 
+                background: white; 
+                margin-bottom: 12px; 
+                border-radius: 12px; 
+                box-shadow: 0 1px 3px rgba(0,0,0,0.05); 
+                overflow: hidden;
+                transition: all 0.3s ease;
+                border: 1px solid #e5e7eb;
+            }
+            
+            details[open] {
+                box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+                border-color: #3aafa9;
+            }
+
+            /* 🛠️ MODIFICADO: Alinhamento blindado para o summary */
+            summary { 
+                background: white; 
+                padding: 16px; 
+                font-size: 15px; 
+                font-weight: 700; 
+                cursor: pointer; 
+                list-style: none; 
+                display: flex !important; 
+                justify-content: space-between; 
+                align-items: center;
+            }
+            
+            summary::-webkit-details-marker { display: none; }
+
+            /* 🛠️ INCLUSÃO: Garante o visual perfeito dos elementos do summary */
+            summary span:first-child {
+                font-weight: 700;
+                color: #111827;
+                font-size: 15px;
+            }
+
+            summary span[style*="background"] {
+                margin-left: auto; /* Força o empurrão para a direita em cenários legados */
+                margin-right: 12px; /* Dá espaço para a setinha do detalhe não colar */
+                font-weight: 700;
+                white-space: nowrap;
+            }
+
+            /* 🔄 SETAS TEXTUAIS CUSTOMIZADAS */
+            summary::after {
+                content: 'v';
+                font-family: monospace;
+                font-size: 14px;
+                font-weight: bold;
+                color: #9ca3af;
+                transition: transform 0.2s ease;
+            }
+            details[open] summary::after {
+                content: '^';
+            }
+
+            .conteudo-etapa { 
+                padding: 12px; 
+                background: #f9fafb; 
+                border-top: 1px solid #f3f4f6;
+            }
+
+            /* ⚽ CARD DO JOGO */
+            .card-jogo {
+                background: white;
+                border-radius: 10px;
+                padding: 14px;
+                margin-bottom: 14px;
+                border: 1px solid #f3f4f6;
+                box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+            }
+
+            .info-topo {
+                display: flex;
+                justify-content: space-between;
+                font-size: 11px;
+                color: #9ca3af;
+                margin-bottom: 8px;
+                text-transform: uppercase;
+                font-weight: 600;
+                letter-spacing: 0.5px;
+            }
+
+            .confronto-container {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 8px;
+            }
+
+            .time-bloco {
+                flex: 1;
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                font-size: 14px;
+                font-weight: 600;
+            }
+
+            .time-bloco.mandante { justify-content: flex-end; text-align: right; }
+            .time-bloco.visitante { justify-content: flex-start; text-align: left; }
+
+            .bandeira {
+                width: 24px;
+                height: 16px;
+                object-fit: cover;
+                border-radius: 2px;
+                box-shadow: 0 1px 2px rgba(0,0,0,0.15);
+                background-color: #e5e7eb;
+            }
+
+            .placar-inputs {
+                display: flex;
+                align-items: center;
+                gap: 6px;
+            }
+
+            .placar-inputs input {
+                width: 38px;
+                height: 38px;
+                text-align: center;
+                font-size: 16px;
+                font-weight: 700;
+                border: 1px solid #d1d5db;
+                border-radius: 6px;
+                background-color: #f9fafb;
+            }
+            
+            .placar-inputs input:disabled {
+                background-color: #e5e7eb;
+                color: #6b7280;
+                border-color: #d1d5db;
+                font-weight: 800;
+            }
+
+            .divisor-x { font-size: 12px; color: #9ca3af; font-weight: bold; }
+
+            /* 🏷️ STATUS INFERIOR DISCRETO */
+            .status-rodape {
+                margin-top: 10px;
+                padding-top: 8px;
+                border-top: 1px dashed #e5e7eb;
+                font-size: 12px;
+                color: #4b5563;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                flex-wrap: wrap;
+                gap: 6px;
+            }
+            .badge-status {
+                padding: 2px 6px;
+                border-radius: 4px;
+                font-size: 10px;
+                font-weight: bold;
+                text-transform: uppercase;
+            }
+            .status-ao-vivo { background: #fee2e2; color: #dc2626; }
+            .status-encerrado { background: #d1fae5; color: #065f46; }
+
+            /* 🏷️ NOVAS ETIQUETAS DE PONTOS E BÔNUS CORRETOS */
+            .container-badges-pontos {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 4px;
+                margin-top: 6px;
+                width: 100%;
+            }
+
+            .badge-bonus {
+                font-size: 10px;
+                font-weight: 700;
+                padding: 2px 8px;
+                border-radius: 12px;
+                text-transform: uppercase;
+            }
+            .badge-faturados { background-color: #1e3a8a; color: white; }
+            .badge-placar { background-color: #d97706; color: white; }
+            .badge-vencedor { background-color: #2563eb; color: white; }
+            .badge-saldo { background-color: #7c3aed; color: white; }
+            .badge-gols-equipe { background-color: #db2777; color: white; }
+    </style>
+</head>
+<body>
+
+    <div class="menu">
+        <a href="/palpites" class="active">📝 Meus Palpites</a>
+        <a href="/ranking">🏆 Ranking</a>
+        <a href="/alterar-senha">🔑 Mudar Senha</a> <a href="/logout" style="color: #ff6b6b;">🚪 Sair</a>
+    </div>
+
+    <h2>Olá, {{ session['usuario_login'] }}!</h2>
+    <p style="color: #4a5568; margin-bottom: 25px; font-size: 14px; line-height: 1.4;">
+        Clique nas etapas para abrir os jogos. <br>
+        <strong>Atenção:</strong> Os palpites serão fechados 1 hora antes do início de cada partida.
+    </p>
+
+    {% with msgs = get_flashed_messages() %}
+        {% if msgs %}
+            <div class="alert-sucesso">{{ msgs[0] }}</div>
+        {% endif %}
+    {% endwith %}
+
+    <form method="POST">
+
+    {% for etapa, lista_jogos in jogos_agrupados.items() %}
+    <details>
+        <summary>
+            <span>📁 {{ etapa }}</span>
+            <span style="background: #3aafa9; color: white; padding: 2px 8px; border-radius: 20px; font-size: 12px;">{{ lista_jogos|length }} jogos</span>
+        </summary>
+        <div class="conteudo-etapa">
+            
+            {% for jogo in lista_jogos %}
+            <div class="card-jogo">
+                <div class="info-topo">
+                    <span>📅 {{ jogo['data_hora'] }}</span>
+                    <span>📍 {{ jogo['cidade'] }}</span>
+                </div>
+
+                <div class="confronto-container">
+                    <div class="time-bloco mandante">
+                        <span>{{ jogo['time1'] }}</span>
+                        <img class="bandeira" src="https://hatscripts.github.io/circle-flags/flags/{{ jogo['flag_code_time1']|trim|lower }}.svg" width="24" onerror="this.src='https://hatscripts.github.io/circle-flags/flags/un.svg'" alt="">
+                    </div>
+
+                    <div class="placar-inputs">
+                        <input type="number" name="gols1_{{ jogo['jogo_id'] }}" value="{{ jogo['gols_time1_palpite'] if jogo['gols_time1_palpite'] is not none and jogo['gols_time1_palpite'] != '' else '' }}" pattern="\d*" {{ 'disabled' if jogo['status'] != 'Pendente' }}>
+                        <span class="divisor-x">x</span>
+                        <input type="number" name="gols2_{{ jogo['jogo_id'] }}" value="{{ jogo['gols_time2_palpite'] if jogo['gols_time2_palpite'] is not none and jogo['gols_time2_palpite'] != '' else '' }}" pattern="\d*" {{ 'disabled' if jogo['status'] != 'Pendente' }}>
+                    </div>
+
+                    <div class="time-bloco visitante">
+                        <img class="bandeira" src="https://hatscripts.github.io/circle-flags/flags/{{ jogo['flag_code_time2']|trim|lower }}.svg" width="24" onerror="this.src='https://hatscripts.github.io/circle-flags/flags/un.svg'" alt="">
+                        <span>{{ jogo['time2'] }}</span>
+                    </div>
+                </div>
+
+                {% if jogo['status'] != 'Pendente' %}
+                <div class="status-rodape">
+                    <span>Placar Real: <strong>{{ jogo['gols_time1_real'] }} x {{ jogo['gols_time2_real'] }}</strong></span>
+                    {% if jogo['status'] == 'Em Andamento' %}
+                        <span class="badge-status status-ao-vivo">🏃 Ao Vivo</span>
+                    {% else %}
+                        <span class="badge-status status-encerrado">✅ Encerrado</span>
+                    {% endif %}
+                    
+                    {# 🎯 EXIBIÇÃO DETALHADA DO QUE FOI ACERTADO #}
+                    {% if jogo['status'] == 'Encerrado' and jogo['gols_time1_palpite'] is not none %}
+                    <div class="container-badges-pontos">
+                        <span class="badge-bonus badge-faturados">+{{ jogo['pontos_faturados'] }} pts faturados</span>
+                        
+                        {% if jogo['acertou_placar'] %}
+                            <span class="badge-bonus badge-placar">🎯 Placar Exato</span>
+                        {% endif %}
+                        
+                        {% if jogo['acertou_vencedor'] %}
+                            <span class="badge-bonus badge-vencedor">✅ Vencedor Correto</span>
+                        {% endif %}
+                        
+                        {% if jogo['bonus_saldo'] %}
+                            <span class="badge-bonus badge-saldo">📊 Bônus: Saldo de Gols</span>
+                        {% endif %}
+                        
+                        {% if jogo['bonus_gols'] %}
+                            <span class="badge-bonus badge-gols-equipe">⚽ Bônus: Gols Fixos</span>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                </div>
+                {% endif %}
+
+            </div>
+            {% endfor %}
+            
+        </div>
+    </details>
+    {% endfor %}
+
+    <button type="submit" style="position: fixed; bottom: 20px; right: 20px; background: #2b7a78; color: white; border: none; padding: 14px 24px; font-size: 15px; font-weight: bold; border-radius: 50px; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.2); z-index: 999;">💾 Salvar Palpites</button>
+
+</form>
+</body>
+</html>

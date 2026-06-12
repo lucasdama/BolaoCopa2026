@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alterar Senha - Bolão</title>
+    <style>
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
+            background-color: #f3f4f6; 
+            color: #1f2937; 
+            max-width: 400px; 
+            margin: 0 auto; 
+            padding: 16px; 
+        }
+        h2 { font-weight: 800; color: #111827; letter-spacing: -0.5px; margin-top: 20px; }
+        
+        .card-senha {
+            background: white;
+            border-radius: 16px;
+            padding: 24px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+            border: 1px solid #e5e7eb;
+            margin-top: 20px;
+        }
+        .campo-grupo {
+            margin-bottom: 16px;
+        }
+        label {
+            display: block;
+            font-size: 13px;
+            font-weight: 700;
+            color: #4b5563;
+            margin-bottom: 6px;
+        }
+        input {
+            width: 100%;
+            padding: 10px 12px;
+            font-size: 15px;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            box-sizing: border-box;
+            background-color: #f9fafb;
+        }
+        input:focus {
+            outline: none;
+            border-color: #3aafa9;
+            background-color: white;
+        }
+        .btn-salvar {
+            width: 100%;
+            background: #2b7a78;
+            color: white;
+            border: none;
+            padding: 12px;
+            font-size: 15px;
+            font-weight: bold;
+            border-radius: 8px;
+            cursor: pointer;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            margin-top: 10px;
+        }
+        .btn-cancelar {
+            display: block;
+            text-align: center;
+            margin-top: 14px;
+            font-size: 14px;
+            color: #6b7280;
+            text-decoration: none;
+            font-weight: 600;
+        }
+        .alert {
+            padding: 12px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            margin-bottom: 16px;
+        }
+        .alert-erro { background-color: #fee2e2; color: #b91c1c; border: 1px solid #fca5a5; }
+    </style>
+</head>
+<body>
+
+    <h2>Alterar sua Senha</h2>
+    <p style="color: #4a5568; font-size: 14px;">Mude a senha padrão para garantir que ninguém altere seus palpites.</p>
+
+    {% with mensagens = get_flashed_messages(with_categories=true) %}
+        {% if mensagens %}
+            {% for categoria, msg in mensagens %}
+                <div class="alert {% if categoria == 'erro' %}alert-erro{% else %}alert-sucesso{% endif %}">
+                    {{ msg }}
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <div class="card-senha">
+        <form method="POST">
+            <div class="campo-grupo">
+                <label for="senha_atual">Senha Atual</label>
+                <input type="password" id="senha_atual" name="senha_atual" required>
+            </div>
+            
+            <div class="campo-grupo">
+                <label for="nova_senha">Nova Senha</label>
+                <input type="password" id="nova_senha" name="nova_senha" required>
+            </div>
+            
+            <div class="campo-grupo">
+                <label for="confirmar_senha">Confirme a Nova Senha</label>
+                <input type="password" id="confirmar_senha" name="confirmar_senha" required>
+            </div>
+            
+            <button type="submit" class="btn-salvar">🔒 Atualizar Senha</button>
+            <a href="/palpites" class="btn-cancelar">Voltar para Palpites</a>
+        </form>
+    </div>
+
+</body>
+</html>

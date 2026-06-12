@@ -1,0 +1,49 @@
+id;team_name;fifa_code;flag_code;group_letter;is_placeholder
+1;Mexico;MEX;MX;A;False
+2;Africa do Sul;RSA;ZA;A;False
+3;Rep da Coreia;KOR;KR;A;False
+4;Rep Tcheca;CZE;CZ;A;True
+5;Canada;CAN;CA;B;False
+6;Bosnia;BIH;BA;B;True
+7;Catar;QAT;QA;B;False
+8;Suica;SUI;CH;B;False
+9;Brasil;BRA;BR;C;False
+10;Marrocos;MAR;MC;C;False
+11;Haiti;HAI;HT;C;False
+12;Escocia;SCO;;C;False
+13;EUA;USA;US;D;False
+14;Paraguai;PAR;PY;D;False
+15;Australia;AUS;AU;D;False
+16;Turquia;TUR;TR;D;True
+17;Alemanha;GER;DE;E;False
+18;Curacao;CUR;CW;E;False
+19;Costa do Marfim;CIV;CI;E;False
+20;Equador;ECU;EC;E;False
+21;Holanda;NED;NL;F;False
+22;Japao;JPN;JP;F;False
+23;Suecia;SWE;SE;F;True
+24;Tunisia;TUN;TN;F;False
+25;Belgica;BEL;BE;G;False
+26;Egito;EGY;EG;G;False
+27;Ira;IRN;IR;G;False
+28;Nova Zelandia;NZL;NZ;G;False
+29;Espanha;ESP;ES;H;False
+30;Cabo Verde;CPV;CV;H;False
+31;Arabia Saudita;KSA;AS;H;False
+32;Uruguai;URU;UY;H;False
+33;Franca;FRA;FR;I;False
+34;Senegal;SEN;SN;I;False
+35;Iraque;IRQ;IQ;I;True
+36;Noruega;NOR;NO;I;False
+37;Argentina;ARG;AR;J;False
+38;Algeria;ALG;DZ;J;False
+39;Austria;AUT;AT;J;False
+40;Jordania;JOR;JO;J;False
+41;Portugal;POR;PT;K;False
+42;Rep Dem Congo;COD;CD;K;True
+43;Uzbequistao;UZB;UZ;K;False
+44;Colombia;COL;CO;K;False
+45;Inglaterra;ENG;GB;L;False
+46;Croacia;CRO;HR;L;False
+47;Gana;GHA;GH;L;False
+48;Panama;PAN;PA;L;False

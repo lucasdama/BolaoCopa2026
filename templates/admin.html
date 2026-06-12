@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Painel do Administrador - CRUD Jogos</title>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background-color: #f4f7f6; max-width: 800px; margin: 30px auto; padding: 20px; }
+        
+        /* Estilização da Sanfona Retrátil */
+        details { background: white; margin-bottom: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); overflow: hidden; }
+        summary { background: #2b7a78; color: white; padding: 15px; font-size: 18px; font-weight: bold; cursor: pointer; outline: none; display: flex; justify-content: space-between; align-items: center; }
+        details[open] summary { background: #17252a; border-bottom: 2px solid #3aafa9; }
+        
+        .conteudo-etapa { padding: 20px; background: #fafafa; }
+        .jogo-painel { border: 1px solid #e2e8f0; padding: 15px; border-radius: 6px; background-color: white; margin-bottom: 15px; }
+        
+        .placar-admin { display: flex; align-items: center; justify-content: center; gap: 15px; margin: 15px 0; }
+        .placar-admin input { width: 50px; text-align: center; padding: 6px; font-size: 16px; border: 1px solid #ccc; border-radius: 4px; }
+        
+        .btn-encerrar { width: 100%; padding: 10px; background-color: #d9534f; color: white; border: none; cursor: pointer; font-size: 14px; border-radius: 4px; font-weight: bold;}
+        .btn-iniciar { width: 100%; padding: 8px; background-color: #f0ad4e; color: white; border: none; cursor: pointer; font-size: 13px; border-radius: 4px; font-weight: bold; margin-bottom: 10px;}
+        button:hover { opacity: 0.9; }
+        
+        .status { font-size: 12px; font-weight: bold; color: #4a5568; padding: 3px 8px; background: #e2e8f0; border-radius: 12px; }
+        .info-jogo { display: flex; justify-content: space-between; color: #718096; font-size: 13px; margin-bottom: 10px; border-bottom: 1px solid #edf2f7; padding-bottom: 5px;}
+        .alert { color: #155724; background-color: #d4edda; padding: 12px; margin-bottom: 20px; border-radius: 4px; text-align: center; font-weight: bold;}
+        .contador-jogos { background: #3aafa9; color: white; padding: 2px 8px; border-radius: 20px; font-size: 14px; }
+    </style>
+</head>
+<body>
+    <h2>👑 Painel de Gestão da Copa do Mundo 2026</h2>
+    <p>Os jogos abaixo foram importados dos seus arquivos CSV e estão organizados cronologicamente.</p>
+
+    {% with messages = get_flashed_messages() %}{% if messages %}<div class="alert">{{ messages[0] }}</div>{% endif %}{% endwith %}
+
+    {% for etapa, lista_jogos in jogos_agrupados.items() %}
+    <details>
+        <summary>
+            <span>📁 {{ etapa }}</span>
+            <span class="contador-jogos">{{ lista_jogos|length }} jogos</span>
+        </summary>
+        <div class="conteudo-etapa">
+            {% if lista_jogos|length == 0 %}
+                <p style="color: #888; text-align: center;">Nenhum jogo cadastrado nesta etapa ainda.</p>
+            {% endif %}
+            
+            {% for jogo in lista_jogos %}
+            <div class="jogo-painel">
+                <div class="info-jogo">
+                    <span>📅 {{ jogo['data_hora'] }} | 📍 {{ jogo['cidade'] }}</span>
+                    <span class="status">ID: {{ jogo['jogo_id'] }} | {{ jogo['status'] }}</span>
+                </div>
+                
+                {% if jogo['status'] == 'Pendente' %}
+                <form method="POST">
+                    <input type="hidden" name="jogo_id" value="{{ jogo['jogo_id'] }}">
+                    <input type="hidden" name="acao" value="iniciar">
+                    <button type="submit" class="btn-iniciar">🚀 Iniciar Partida (Bloquear Palpites)</button>
+                </form>
+                {% endif %}
+                
+                <form method="POST">
+                    <input type="hidden" name="jogo_id" value="{{ jogo['jogo_id'] }}">
+                    <input type="hidden" name="acao" value="encerrar">
+                    
+                    <div class="placar-admin">
+                        <span style="width: 35%; text-align: right; font-weight: bold;">{{ jogo['time1'] }}</span>
+                        <input type="number" name="gols_time1_real" min="0" value="{{ jogo['gols_time1_real'] if jogo['gols_time1_real'] is not none else '' }}" required>
+                        <span>X</span>
+                        <input type="number" name="gols_time2_real" min="0" value="{{ jogo['gols_time2_real'] if jogo['gols_time2_real'] is not none else '' }}" required>
+                        <span style="width: 35%; text-align: left; font-weight: bold;">{{ jogo['time2'] }}</span>
+                    </div>
+                    <button type="submit" class="btn-encerrar">🏁 Encerrar e Atualizar Notas</button>
+                </form>
+            </div>
+            {% endfor %}
+        </div>
+    </details>
+    {% endfor %}
+
+    <p style="text-align: center; margin-top: 30px;"><a href="/ranking" style="color: #2b7a78; text-decoration: none; font-weight: bold;">← Voltar ao Ranking</a></p>
+</body>
+</html>
