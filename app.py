@@ -569,6 +569,8 @@ def alterar_senha():
             
     return render_template('alterar_senha.html')
 
+#comentário teste
+
 # 🚪 ROTA: Logout
 @app.route('/logout')
 def logout():
