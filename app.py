@@ -1,61 +1,113 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, session
+import os
 import sqlite3
+import psycopg2
+from psycopg2.extras import DictCursor
 from datetime import datetime, timedelta
 from pontuacao import calcular_pontos
 from werkzeug.security import generate_password_hash, check_password_hash
-import psycopg2
-from psycopg2.extras import DictCursor  
 
 app = Flask(__name__)
 app.secret_key = 'chave_secreta_copa_2026_super_protegida'
 
+# 🎛️ FUNÇÃO INTELIGENTE DE CONEXÃO MULTI-BANCO
 def obter_conexao_db():
     url_banco = os.environ.get('DATABASE_URL')
     
     if url_banco:
         # CONEXÃO PRODUÇÃO (POSTGRESQL NA RENDER)
+        # O link interno da Render às vezes precisa desse ajuste de sslmode
+        if "sslmode=" not in url_banco:
+            url_banco += "?sslmode=prefer"
         conn = psycopg2.connect(url_banco)
         return conn
     else:
         # CONEXÃO LOCAL (SQLITE NO SEU PC)
-        conn = obter_conexao()
+        conn = sqlite3.connect('bolao.db')
         conn.row_factory = sqlite3.Row
         return conn
 
+# 📊 TRATAMENTO DOS CURSORES CONFORME O BANCO ATIVO
+def obter_cursor(conn):
+    if os.environ.get('DATABASE_URL'):
+        return conn.cursor(cursor_factory=DictCursor)
+    else:
+        return conn.cursor()
+
+# 📝 ADAPTADOR DINÂMICO DE QUERIES (?, ? vs %s, %s)
+def preparar_query(query):
+    if os.environ.get('DATABASE_URL'):
+        return query.replace('?', '%s')
+    return query
+
 def inicializar_db():
     conn = obter_conexao_db()
-    cursor = conn.cursor()
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS usuarios (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            login TEXT UNIQUE NOT NULL,
-            senha TEXT NOT NULL
-        )
-    ''')
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS palpites (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            usuario_id INTEGER,
-            jogo_id TEXT NOT NULL,
-            gols_time1 INTEGER,
-            gols_time2 INTEGER,
-            FOREIGN KEY (usuario_id) REFERENCES usuarios (id)
-        )
-    ''')
-    # Tabela jogos atualizada
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS jogos (
-            jogo_id TEXT PRIMARY KEY,
-            time1 TEXT NOT NULL,
-            time2 TEXT NOT NULL,
-            gols_time1_real INTEGER,
-            gols_time2_real INTEGER,
-            status TEXT DEFAULT 'Pendente',
-            etapa TEXT NOT NULL,
-            data_hora TEXT NOT NULL,
-            cidade TEXT
-        )
-    ''')
+    cursor = obter_cursor(conn)
+    
+    if os.environ.get('DATABASE_URL'):
+        # Criando tabelas no PostgreSQL da Render (Usa SERIAL em vez de AUTOINCREMENT)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS usuarios (
+                id SERIAL PRIMARY KEY,
+                login TEXT UNIQUE NOT NULL,
+                senha TEXT NOT NULL
+            )
+        ''')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS palpites (
+                id SERIAL PRIMARY KEY,
+                usuario_id INTEGER,
+                jogo_id TEXT NOT NULL,
+                gols_time1 INTEGER,
+                gols_time2 INTEGER,
+                FOREIGN KEY (usuario_id) REFERENCES usuarios (id)
+            )
+        ''')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS jogos (
+                jogo_id TEXT PRIMARY KEY,
+                time1 TEXT NOT NULL,
+                time2 TEXT NOT NULL,
+                gols_time1_real INTEGER,
+                gols_time2_real INTEGER,
+                status TEXT DEFAULT 'Pendente',
+                etapa TEXT NOT NULL,
+                data_hora TEXT NOT NULL,
+                cidade TEXT
+            )
+        ''')
+    else:
+        # Criando tabelas no SQLite Local
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS usuarios (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                login TEXT UNIQUE NOT NULL,
+                senha TEXT NOT NULL
+            )
+        ''')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS palpites (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                usuario_id INTEGER,
+                jogo_id TEXT NOT NULL,
+                gols_time1 INTEGER,
+                gols_time2 INTEGER,
+                FOREIGN KEY (usuario_id) REFERENCES usuarios (id)
+            )
+        ''')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS jogos (
+                jogo_id TEXT PRIMARY KEY,
+                time1 TEXT NOT NULL,
+                time2 TEXT NOT NULL,
+                gols_time1_real INTEGER,
+                gols_time2_real INTEGER,
+                status TEXT DEFAULT 'Pendente',
+                etapa TEXT NOT NULL,
+                data_hora TEXT NOT NULL,
+                cidade TEXT
+            )
+        ''')
     conn.commit()
     conn.close()
 
@@ -67,11 +119,13 @@ def login():
         senha_user = request.form['usuario_senha']
         
         conn = obter_conexao_db()
-        # 🔍 Buscamos o usuário apenas pelo login
-        usuario = conn.execute('SELECT * FROM usuarios WHERE login = ?', (login_user,)).fetchone()
+        cursor = obter_cursor(conn)
+        
+        query = preparar_query('SELECT * FROM usuarios WHERE login = ?')
+        cursor.execute(query, (login_user,))
+        usuario = cursor.fetchone()
         conn.close()
         
-        # 🔒 Se o usuário existir, comparamos a senha digitada com o hash salvo no banco
         if usuario and check_password_hash(usuario['senha'], senha_user):
             session['usuario_id'] = usuario['id']
             session['usuario_login'] = usuario['login']
@@ -85,7 +139,6 @@ def login():
 @app.route('/cadastro', methods=['GET', 'POST'])
 def cadastro():
     if request.method == 'POST':
-        # Ajustado para bater com os nomes do formulário moderno (usuario_login e usuario_senha)
         login_user = request.form['usuario_login'].strip()
         senha_user = request.form['usuario_senha'].strip()
         
@@ -93,19 +146,18 @@ def cadastro():
             flash('Preencha todos os campos!')
             return render_template('cadastro.html')
             
-        # 🔒 Cria o hash seguro e indestrutível da senha digitada
         senha_criptografada = generate_password_hash(senha_user)
             
         conn = obter_conexao_db()
-        cursor = conn.cursor()
+        cursor = obter_cursor(conn)
         try:
-            # Gravando a senha_criptografada no banco de dados
-            cursor.execute('INSERT INTO usuarios (login, senha) VALUES (?, ?)', (login_user, senha_criptografada))
+            query = preparar_query('INSERT INTO usuarios (login, senha) VALUES (?, ?)')
+            cursor.execute(query, (login_user, senha_criptografada))
             conn.commit()
             conn.close()
             flash('Cadastro realizado com sucesso! Faça seu login.')
             return redirect(url_for('login'))
-        except sqlite3.IntegrityError:
+        except (sqlite3.IntegrityError, psycopg2.IntegrityError):
             conn.close()
             flash('Esse login já existe! Escolha outro.')
             
@@ -118,93 +170,81 @@ def palpites():
         return redirect(url_for('login'))
         
     usuario_id = session['usuario_id']
-    conn = obter_conexao()
-    conn.row_factory = sqlite3.Row
-    cursor = conn.cursor()
+    conn = obter_conexao_db()
+    cursor = obter_cursor(conn)
 
     # 💾 SE O USUÁRIO CLICOU EM SALVAR
     if request.method == 'POST':
         print("📥 Formulário recebido! Processando palpites...")
         for chave, valor in request.form.items():
             if chave.startswith('gols1_'):
-                # Extrai o ID do jogo (ex: se vier "gols1_Jogo_1", o jogo_id será "Jogo_1")
                 jogo_id = chave.replace('gols1_', '')
                 gols_t1 = valor
                 gols_t2 = request.form.get(f'gols2_{jogo_id}')
 
-                # Validação estrita: só grava se o usuário digitou ambos os campos
                 if gols_t1 != '' and gols_t2 != '' and gols_t1 is not None and gols_t2 is not None:
                     try:
-                        # 🚨 NOVA DEFESA ANTI-NEGATIVOS: ignora ou barra se menor que zero
                         if int(gols_t1) < 0 or int(gols_t2) < 0:
                             print(f"⚠️ Tentativa de palpite negativo ignorada para o jogo {jogo_id}")
-                            continue # Pula este jogo e não salva nada incorreto
+                            continue
 
-                        cursor.execute('SELECT 1 FROM palpites WHERE usuario_id = ? AND jogo_id = ?', (usuario_id, jogo_id))
+                        query_check = preparar_query('SELECT 1 FROM palpites WHERE usuario_id = ? AND jogo_id = ?')
+                        cursor.execute(query_check, (usuario_id, jogo_id))
                         existe = cursor.fetchone()
 
                         if existe:
-                            cursor.execute('''
+                            query_up = preparar_query('''
                                 UPDATE palpites 
                                 SET gols_time1 = ?, gols_time2 = ? 
                                 WHERE usuario_id = ? AND jogo_id = ?
-                            ''', (int(gols_t1), int(gols_t2), usuario_id, jogo_id))
+                            ''')
+                            cursor.execute(query_up, (int(gols_t1), int(gols_t2), usuario_id, jogo_id))
                         else:
-                            cursor.execute('''
+                            query_in = preparar_query('''
                                 INSERT INTO palpites (usuario_id, jogo_id, gols_time1, gols_time2) 
                                 VALUES (?, ?, ?, ?)
-                            ''', (usuario_id, jogo_id, int(gols_t1), int(gols_t2)))
+                            ''')
+                            cursor.execute(query_in, (usuario_id, jogo_id, int(gols_t1), int(gols_t2)))
                     except Exception as e:
                         print(f"❌ Erro ao inserir/atualizar jogo {jogo_id}: {e}")
         
         conn.commit()
+        conn.close()
         print("💾 Todos os palpites foram validados e commitados no banco!")
         flash('Palpites salvos com sucesso!')
         return redirect(url_for('palpites'))
 
     # 🔍 BUSCA DOS JOGOS
-    cursor.execute('''
+    query_select = preparar_query('''
         SELECT 
             j.jogo_id, j.time1, j.time2, j.etapa, j.data_hora, j.cidade, j.status,
-            j.flag_code_time1, j.flag_code_time2, j.gols_time1_real, j.gols_time2_real,
+            j.gols_time1_real, j.gols_time2_real,
             p.gols_time1 AS gols_time1_palpite, p.gols_time2 AS gols_time2_palpite
         FROM jogos j
         LEFT JOIN palpites p ON j.jogo_id = p.jogo_id AND p.usuario_id = ?
         ORDER BY j.data_hora ASC
-    ''', (usuario_id,))
-    
+    ''')
+    cursor.execute(query_select, (usuario_id,))
     jogos = cursor.fetchall()
     
-    # 📁 SUA ESTRUTURA DE ETAPAS OFICIAIS ORGANIZADAS
     etapas_ordem = [
-        "Fase de Grupos Rodada 1", 
-        "Fase de Grupos Rodada 2", 
-        "Fase de Grupos Rodada 3",
-        "Dezesseis-avos de final", 
-        "Oitavas de final", 
-        "Quartas de final", 
-        "Semifinais",
-        "Disputa de terceiro lugar", 
-        "Final"
+        "Fase de Grupos Rodada 1", "Fase de Grupos Rodada 2", "Fase de Grupos Rodada 3",
+        "Dezesseis-avos de final", "Oitavas de final", "Quartas de final", "Semifinais",
+        "Disputa de terceiro lugar", "Final"
     ]
     
-    # Inicializa o dicionário com a ordem correta
     jogos_agrupados = {etapa: [] for etapa in etapas_ordem}
     
-    # Distribui os jogos nas chaves correspondentes e calcula os bônus visuais
     for row in jogos:
-        # Transformamos o row do SQLite em um dicionário comum para podermos adicionar novas chaves dinamicamente
         jogo = dict(row)
         etapa_jogo = jogo['etapa']
         
-        # Inicializa as variáveis de bônus para a tela
         jogo['acertou_placar'] = False
         jogo['acertou_vencedor'] = False
         jogo['bonus_saldo'] = False
         jogo['bonus_gols'] = False
         jogo['pontos_faturados'] = 0
         
-        # 🧠 Se o jogo já acabou e o usuário deu um palpite, calcula o que ele acertou
         if jogo['status'] == 'Encerrado' and jogo['gols_time1_real'] is not None and jogo['gols_time1_palpite'] is not None:
             try:
                 g1_real = int(jogo['gols_time1_real'])
@@ -212,7 +252,6 @@ def palpites():
                 g1_palp = int(jogo['gols_time1_palpite'])
                 g2_palp = int(jogo['gols_time2_palpite'])
                 
-                # 1. Placar Exato
                 if g1_real == g1_palp and g2_real == g2_palp:
                     jogo['acertou_placar'] = True
                     jogo['pontos_faturados'] = 10
@@ -220,17 +259,13 @@ def palpites():
                     venc_real = "t1" if g1_real > g2_real else "t2" if g2_real > g1_real else "empate"
                     venc_palp = "t1" if g1_palp > g2_palp else "t2" if g2_palp > g1_palp else "empate"
                     
-                    # 2. Vencedor ou Empate
                     if venc_real == venc_palp:
                         jogo['acertou_vencedor'] = True
                         jogo['pontos_faturados'] += 5
-                        
-                        # Bônus: Saldo de Gols
                         if (g1_real - g2_real) == (g1_palp - g2_palp):
                             jogo['bonus_saldo'] = True
                             jogo['pontos_faturados'] += 2
                             
-                    # Bônus: Gols de uma das equipes
                     if g1_real == g1_palp or g2_real == g2_palp:
                         jogo['bonus_gols'] = True
                         jogo['pontos_faturados'] += 1
@@ -251,9 +286,17 @@ def ranking():
         return redirect(url_for('login'))
         
     conn = obter_conexao_db()
-    usuarios = conn.execute('SELECT id, login FROM usuarios').fetchall()
-    jogos_encerrados = conn.execute('SELECT * FROM jogos WHERE status = "Encerrado"').fetchall()
-    todos_palpites = conn.execute('SELECT * FROM palpites').fetchall()
+    cursor = obter_cursor(conn)
+    
+    cursor.execute('SELECT id, login FROM usuarios')
+    usuarios = cursor.fetchall()
+    
+    query_jogos = preparar_query('SELECT * FROM jogos WHERE status = ?')
+    cursor.execute(query_jogos, ("Encerrado",))
+    jogos_encerrados = cursor.fetchall()
+    
+    cursor.execute('SELECT * FROM palpites')
+    todos_palpites = cursor.fetchall()
     conn.close()
     
     tabela_pontos = {u['id']: {'id': u['id'], 'login': u['login'], 'pontos': 0} for u in usuarios}
@@ -266,38 +309,30 @@ def ranking():
         if jogo_id in mapa_jogos and usr_id in tabela_pontos:
             jogo = mapa_jogos[jogo_id]
             
-            # 🛡️ SEGURANÇA: Se o admin encerrou mas esqueceu de digitar o placar, ignora para não quebrar
             if jogo['gols_time1_real'] is None or jogo['gols_time2_real'] is None:
                 continue
                 
-            # 🛡️ SEGURANÇA: Garante que tudo seja tratado estritamente como INTEIRO para as contas baterem
             try:
                 g1_real = int(jogo['gols_time1_real'])
                 g2_real = int(jogo['gols_time2_real'])
                 g1_palp = int(p['gols_time1'])
                 g2_palp = int(p['gols_time2'])
             except (ValueError, TypeError):
-                continue # Se houver algum valor corrompido ou vazio, pula o palpite com segurança
+                continue
             
             pontos_do_palpite = 0
             
-            # Critério 1: Placar Exato (10 pontos)
             if g1_real == g1_palp and g2_real == g2_palp:
                 pontos_do_palpite = 10
             else:
-                # Determina o vencedor/empate real e do palpite
                 venc_real = "t1" if g1_real > g2_real else "t2" if g2_real > g1_real else "empate"
                 venc_palp = "t1" if g1_palp > g2_palp else "t2" if g2_palp > g1_palp else "empate"
                 
-                # Critério 2: Vencedor ou Empate (5 pontos)
                 if venc_real == venc_palp:
                     pontos_do_palpite += 5
-                    
-                    # Bônus: Saldo de Gols (+2 pontos)
                     if (g1_real - g2_real) == (g1_palp - g2_palp):
                         pontos_do_palpite += 2
                         
-                # Bônus: Gols de uma das equipes (+1 ponto)
                 if g1_real == g1_palp or g2_real == g2_palp:
                     pontos_do_palpite += 1
                     
@@ -305,11 +340,8 @@ def ranking():
 
     ranking_ordenado = list(tabela_pontos.values())
     ranking_ordenado.sort(key=lambda x: x['pontos'], reverse=True)
-    # ... (fim do cálculo dos pontos)
-    ranking_ordenado = list(tabela_pontos.values())
-    ranking_ordenado.sort(key=lambda x: x['pontos'], reverse=True)
     
-    print(f"📊 DADOS ENVIADOS PARA O HTML: {ranking_ordenado}") # 👈 ADICIONE ESTE PRINT AQUI!
+    print(f"📊 DADOS ENVIADOS PARA O HTML: {ranking_ordenado}")
     
     return render_template('ranking.html', usuarios_ranking=ranking_ordenado)
 
@@ -324,28 +356,21 @@ def admin():
         return redirect(url_for('palpites'))
 
     conn = obter_conexao_db()
+    cursor = obter_cursor(conn)
     
     if request.method == 'POST':
-        cursor = conn.cursor()
-        
-        # Lê os inputs ocultos (hidden) que o seu HTML envia ao clicar no botão
         jogo_id = request.form.get('jogo_id')
         acao = request.form.get('acao')
         
         print(f"\n=== 📥 COMANDO ADMIN RECEBIDO ===")
         print(f"Jogo ID: {jogo_id} | Ação clicada: {acao}")
         
-        # Cenário 1: Clicou no botão de Iniciar Partida
         if acao == 'iniciar':
-            cursor.execute('''
-                UPDATE jogos 
-                SET status = "Em Andamento" 
-                WHERE jogo_id = ?
-            ''', (jogo_id,))
+            query_init = preparar_query('UPDATE jogos SET status = "Em Andamento" WHERE jogo_id = ?')
+            cursor.execute(query_init, (jogo_id,))
             print(f"🏃 Partida {jogo_id} alterada para 'Em Andamento'.")
             flash('Partida iniciada! Palpites trancados.')
             
-        # Cenário 2: Preencheu o placar e clicou em Encerrado
         elif acao == 'encerrar':
             gols_t1 = request.form.get('gols_time1_real')
             gols_t2 = request.form.get('gols_time2_real')
@@ -353,14 +378,13 @@ def admin():
             print(f"⚽ Placar digitado: {gols_t1} X {gols_t2}")
             
             if gols_t1 is not None and gols_t2 is not None and gols_t1.strip() != '' and gols_t2.strip() != '':
-                # 🎯 CORREÇÃO AQUI: Removido o 'OR id = ?' que quebrava o banco
-                cursor.execute('''
+                query_end = preparar_query('''
                     UPDATE jogos 
                     SET gols_time1_real = ?, gols_time2_real = ?, status = "Encerrado" 
                     WHERE jogo_id = ?
-                ''', (int(gols_t1), int(gols_t2), jogo_id))
-                
-                print(f"✅ Jogo {jogo_id} ENCERRADO. Linhas afetadas: {cursor.rowcount}")
+                ''')
+                cursor.execute(query_end, (int(gols_t1), int(gols_t2), jogo_id))
+                print(f"✅ Jogo {jogo_id} ENCERRADO.")
                 flash('Resultado gravado e jogo encerrado com sucesso!')
             else:
                 flash('Erro: Você precisa digitar os gols antes de encerrar!')
@@ -368,25 +392,16 @@ def admin():
         conn.commit()
         conn.close()
         print("=== 💾 ALTERAÇÕES SALVAS COM COMMIT ===\n")
-        
-        # Recarrega a própria página do admin para mostrar as mudanças atualizadas
         return redirect(url_for('admin'))
         
-    # Código do GET: Busca os jogos para listar na tela
-    jogos = conn.execute('SELECT * FROM jogos ORDER BY data_hora ASC').fetchall()
+    cursor.execute('SELECT * FROM jogos ORDER BY data_hora ASC')
+    jogos = cursor.fetchall()
     conn.close()
     
-    # Suas etapas oficiais organizadas sem hífens
     etapas_ordem = [
-        "Fase de Grupos Rodada 1", 
-        "Fase de Grupos Rodada 2", 
-        "Fase de Grupos Rodada 3",
-        "Dezesseis-avos de final", 
-        "Oitavas de final", 
-        "Quartas de final", 
-        "Semifinais",
-        "Disputa de terceiro lugar", 
-        "Final"
+        "Fase de Grupos Rodada 1", "Fase de Grupos Rodada 2", "Fase de Grupos Rodada 3",
+        "Dezesseis-avos de final", "Oitavas de final", "Quartas de final", "Semifinais",
+        "Disputa de terceiro lugar", "Final"
     ]
     
     jogos_agrupados = {etapa: [] for etapa in etapas_ordem}
@@ -405,26 +420,30 @@ def palpites_amigo(amigo_id):
         return redirect(url_for('login'))
         
     conn = obter_conexao_db()
+    cursor = obter_cursor(conn)
     
-    # 1. Garante que o amigo_id seja tratado como INTEIRO para a busca no banco
     try:
         amigo_id_int = int(amigo_id)
     except ValueError:
         amigo_id_int = amigo_id
 
-    # Busca o nome do amigo
-    amigo = conn.execute('SELECT login FROM usuarios WHERE id = ?', (amigo_id_int,)).fetchone()
+    query_amigo = preparar_query('SELECT login FROM usuarios WHERE id = ?')
+    cursor.execute(query_amigo, (amigo_id_int,))
+    amigo = cursor.fetchone()
+    
     if not amigo:
         conn.close()
         return "Usuário não encontrado", 404
         
-    # Busca todos os jogos e os palpites do amigo usando o ID correto
-    jogos = conn.execute('SELECT * FROM jogos ORDER BY data_hora ASC').fetchall()
-    palpites_busca = conn.execute('SELECT * FROM palpites WHERE usuario_id = ?', (amigo_id_int,)).fetchall()
+    cursor.execute('SELECT * FROM jogos ORDER BY data_hora ASC')
+    jogos = cursor.fetchall()
+    
+    query_palpites = preparar_query('SELECT * FROM palpites WHERE usuario_id = ?')
+    cursor.execute(query_palpites, (amigo_id_int,))
+    palpites_busca = cursor.fetchall()
     conn.close()
     
-    # Mapeia os palpites indexados pelo jogo_id
-    meus_palpites = {p['jogo_id']: (p['gols_time1'], p['gols_time2']) for p in []}
+    meus_palpites = {}
     try:
         meus_palpites = {p['jogo_id']: (p['gols_time1'], p['gols_time2']) for p in palpites_busca}
     except Exception:
@@ -450,12 +469,10 @@ def palpites_amigo(amigo_id):
         jogo['bonus_gols'] = False
         jogo['pontos_faturados'] = 0
         
-        # Resgata o palpite do amigo
         palpite = meus_palpites.get(j_id)
         jogo['gols_time1_palpite'] = palpite[0] if palpite else None
         jogo['gols_time2_palpite'] = palpite[1] if palpite else None
         
-        # 🔑 Tratamento flexível para a data do banco
         horario_jogo = None
         if jogo.get('data_hora'):
             data_str = str(jogo['data_hora']).strip()
@@ -466,21 +483,15 @@ def palpites_amigo(amigo_id):
                 except ValueError:
                     continue
                 
-        # 🔒 VALIDAÇÃO DA TRAVA (Se o status mudou ou se o tempo expirou)
         jogo_trancado = False
-        
-        # Se no banco o status estiver diferente de 'Pendente' (ex: 'Em Andamento', 'Encerrado', 'Trancado')
         if str(jogo.get('status', '')).strip() != 'Pendente':
             jogo_trancado = True
-        # Se a validação por hora passar
         elif horario_jogo and agora >= (horario_jogo - timedelta(hours=1)):
             jogo_trancado = True
 
-        # 🚨 SE MESMO TRANCADO ELE NÃO APARECER, COMENTE AS DUAS LINHAS ABAIXO PARA TESTAR:
         if not jogo_trancado:
             continue
 
-        # CÁLCULO DE PONTOS
         if jogo['status'] == 'Encerrado' and jogo['gols_time1_real'] is not None and jogo['gols_time1_palpite'] is not None and jogo['gols_time1_palpite'] != '':
             try:
                 g1_real = int(jogo['gols_time1_real'])
@@ -535,19 +546,17 @@ def alterar_senha():
             return redirect(url_for('alterar_senha'))
             
         conn = obter_conexao_db()
-        cursor = conn.cursor()
+        cursor = obter_cursor(conn)
         
-        cursor.execute('SELECT senha FROM usuarios WHERE id = ?', (usuario_id,))
+        query_usr = preparar_query('SELECT senha FROM usuarios WHERE id = ?')
+        cursor.execute(query_usr, (usuario_id,))
         usuario = cursor.fetchone()
         
-        # 🔐 A MÁGICA DA CRIPTOGRAFIA ACONTECE AQUI:
-        # check_password_hash traduz o hash do banco e compara com a digitada
         if usuario and check_password_hash(usuario['senha'], senha_atual):
-            
-            # Geramos um novo hash seguro para a nova senha antes de salvar
             nova_senha_criptografada = generate_password_hash(nova_senha)
             
-            cursor.execute('UPDATE usuarios SET senha = ? WHERE id = ?', (nova_senha_criptografada, usuario_id))
+            query_up = preparar_query('UPDATE usuarios SET senha = ? WHERE id = ?')
+            cursor.execute(query_up, (nova_senha_criptografada, usuario_id))
             conn.commit()
             conn.close()
             
