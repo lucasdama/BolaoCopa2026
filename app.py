@@ -6,6 +6,7 @@ from psycopg2.extras import DictCursor
 from datetime import datetime, timedelta
 from pontuacao import calcular_pontos
 from werkzeug.security import generate_password_hash, check_password_hash
+from flask import jsonify, session
 
 app = Flask(__name__)
 app.secret_key = 'chave_secreta_copa_2026_super_protegida'
@@ -568,6 +569,261 @@ def alterar_senha():
             return redirect(url_for('alterar_senha'))
             
     return render_template('alterar_senha.html')
+
+@app.route('/api/evolucao-pontos')
+def evolucao_pontos():
+    if 'usuario_id' not in session:
+        return jsonify({'erro': 'Não autorizado'}), 401
+        
+    try:
+        usuario_logado_id = int(session['usuario_id'])
+    except (ValueError, TypeError):
+        usuario_logado_id = session['usuario_id']
+        
+    conn = obter_conexao_db()
+    cursor = conn.cursor()
+    
+    is_postgres = 'sqlite' not in str(type(conn)).lower()
+    placeholder = '%s' if is_postgres else '?'
+    
+    # 📑 FUNÇÃO INTERNA COM A SUA REGRA OFICIAL DE PONTOS
+    def calcular_pontos_oficial(g1_real, g2_real, g1_palpite, g2_palpite):
+        # 1. Verificação de acerto em cheio (Placar Exato)
+        if g1_real == g1_palpite and g2_real == g2_palpite:
+            return 10  # Acerto completo não acumula com os outros bônus
+
+        pontos = 0
+        # 2. Verificação do Vencedor / Empate (5 pontos)
+        vencedor_real = "time1" if g1_real > g2_real else "time2" if g2_real > g1_real else "empate"
+        vencedor_palpite = "time1" if g1_palpite > g2_palpite else "time2" if g2_palpite > g1_palpite else "empate"
+        
+        if vencedor_real == vencedor_palpite:
+            pontos += 5
+            
+            # 3. Bônus de Saldo de Gols (2 pontos)
+            saldo_real = g1_real - g2_real
+            saldo_palpite = g1_palpite - g2_palpite
+            if saldo_real == saldo_palpite:
+                pontos += 2
+
+        # 4. Bônus de Gols de um dos times (1 ponto)
+        if g1_real == g1_palpite or g2_real == g2_palpite:
+            pontos += 1
+            
+        return pontos
+
+    # 1. 🏆 BUSCA DOS USUÁRIOS
+    cursor.execute('SELECT id, login FROM usuarios')
+    todos_usuarios_bruto = cursor.fetchall()
+
+    # 2. 🔎 IDENTIFICAÇÃO DO TOP 3 REAL USANDO A SUA REGRA
+    cursor.execute('''
+        SELECT u.id, j.gols_time1_real, j.gols_time2_real, p.gols_time1, p.gols_time2 
+        FROM usuarios u 
+        JOIN palpites p ON u.id = p.usuario_id 
+        JOIN jogos j ON p.jogo_id = j.jogo_id 
+        WHERE j.status = 'Encerrado'
+    ''')
+    todos_palpites_ranking = cursor.fetchall()
+
+    pontos_dict = {int(user[0]): 0 for user in todos_usuarios_bruto}
+    for u_id_bruto, g1_r, g2_r, g1_p, g2_p in todos_palpites_ranking:
+        u_id = int(u_id_bruto)
+        try:
+            g1_r, g2_r, g1_p, g2_p = int(g1_r), int(g2_r), int(g1_p), int(g2_p)
+        except (ValueError, TypeError):
+            continue
+        pontos_dict[u_id] += calcular_pontos_oficial(g1_r, g2_r, g1_p, g2_p)
+
+    lista_usuarios = []
+    for user_bruto in todos_usuarios_bruto:
+        u_id = int(user_bruto[0])
+        lista_usuarios.append({
+            'id': u_id,
+            'login': user_bruto[1],
+            'pontos': pontos_dict.get(u_id, 0)
+        })
+        
+    lista_usuarios.sort(key=lambda x: (-x['pontos'], x['login']))
+    top3_usuarios = [(user['id'], user['login']) for user in lista_usuarios[:3]]
+
+    # 3. 🔐 MONTAGEM DOS ALVOS DO GRÁFICO
+    usuarios_alvo = {}
+    for u_id, u_login in top3_usuarios:
+        usuarios_alvo[int(u_id)] = f"🏆 {u_login}"
+        
+    if usuario_logado_id not in usuarios_alvo:
+        cursor.execute('SELECT login FROM usuarios WHERE id = ' + placeholder, (usuario_logado_id,))
+        res_logado = cursor.fetchone()
+        login_logado = res_logado[0] if res_logado else "Você"
+        usuarios_alvo[usuario_logado_id] = f"👤 {login_logado} (Você)"
+    else:
+        if not usuarios_alvo[usuario_logado_id].endswith("(Você)"):
+            usuarios_alvo[usuario_logado_id] += " (Você)"
+
+    # 4. 🔎 BUSCA DETALHADA DOS PALPITES DOS ALVOS
+    ids_busca = list(usuarios_alvo.keys())
+    placeholders_in = ','.join(['%s' if is_postgres else '?' for _ in ids_busca])
+    
+    query_palpites = f'''
+        SELECT p.usuario_id, j.jogo_id, j.gols_time1_real, j.gols_time2_real, p.gols_time1, p.gols_time2
+        FROM palpites p
+        INNER JOIN jogos j ON p.jogo_id = j.jogo_id
+        WHERE p.usuario_id IN ({placeholders_in}) AND j.status = 'Encerrado'
+    '''
+    cursor.execute(query_palpites, tuple(ids_busca))
+    todos_palpites = cursor.fetchall()
+    
+    cursor.execute("SELECT jogo_id FROM jogos WHERE status = 'Encerrado'")
+    jogos_encerrados_bruto = cursor.fetchall()
+    conn.close()
+    
+    lista_jogos = [j[0] for j in jogos_encerrados_bruto]
+    try:
+        lista_jogos.sort(key=lambda x: int(x.split('_')[1]))
+    except Exception:
+        lista_jogos.sort()
+
+    palpites_estruturados = {u_id: {} for u_id in ids_busca}
+    for u_id_bruto, jogo_id, g1_r, g2_r, g1_p, g2_p in todos_palpites:
+        u_id = int(u_id_bruto)
+        if u_id in palpites_estruturados:
+            palpites_estruturados[u_id][jogo_id] = (g1_r, g2_r, g1_p, g2_p)
+
+    # 5. 📉 LOOP DE CONSTRUÇÃO DAS LINHAS
+    linhas_grafico = []
+    cores = ['#d97706', '#9ca3af', '#b45309', '#2b7a78'] 
+    
+    for index, u_id in enumerate(ids_busca):
+        pontos_acumulados = 0
+        pontos_eixo_y = []
+        
+        for jogo_id in lista_jogos:
+            if jogo_id in palpites_estruturados[u_id]:
+                try:
+                    g1_real = int(palpites_estruturados[u_id][jogo_id][0])
+                    g2_real = int(palpites_estruturados[u_id][jogo_id][1])
+                    g1_palpite = int(palpites_estruturados[u_id][jogo_id][2])
+                    g2_palpite = int(palpites_estruturados[u_id][jogo_id][3])
+                except (ValueError, TypeError):
+                    pontos_eixo_y.append(pontos_acumulados)
+                    continue
+
+                # Aplica exatamente a mesma regra oficial
+                pontos_da_partida = calcular_pontos_oficial(g1_real, g2_real, g1_palpite, g2_palpite)
+                pontos_acumulados += pontos_da_partida
+            
+            pontos_eixo_y.append(pontos_acumulados)
+            
+        cor_linha = '#2b7a78' if u_id == usuario_logado_id else cores[min(index, 2)]
+        
+        linhas_grafico.append({
+            'label': usuarios_alvo[u_id],
+            'dados': pontos_eixo_y,
+            'cor': cor_linha
+        })
+        
+    eixo_x_formatado = [f"Jogo {j.split('_')[1]}" if '_' in j else j for j in lista_jogos]
+    
+    return jsonify({
+        'partidas': eixo_x_formatado,
+        'linhas': linhas_grafico
+    })
+
+# ROTA: Evolução Completa de Pontos (Todos os Usuários, Gráfico Detalhado)
+@app.route('/api/evolucao-pontos-completo')
+def evolucao_pontos_completo():
+    if 'usuario_id' not in session:
+        return jsonify({'erro': 'Não autorizado'}), 401
+        
+    conn = obter_conexao_db()
+    cursor = conn.cursor()
+    
+    # Reaproveitamos a sua função interna idêntica de pontos
+    def calcular_pontos_oficial(g1_real, g2_real, g1_palpite, g2_palpite):
+        if g1_real == g1_palpite and g2_real == g2_palpite:
+            return 10
+        pontos = 0
+        vencedor_real = "time1" if g1_real > g2_real else "time2" if g2_real > g1_real else "empate"
+        vencedor_palpite = "time1" if g1_palpite > g2_palpite else "time2" if g2_palpite > g1_palpite else "empate"
+        if vencedor_real == vencedor_palpite:
+            pontos += 5
+            saldo_real = g1_real - g2_real
+            saldo_palpite = g1_palpite - g2_palpite
+            if saldo_real == saldo_palpite:
+                pontos += 2
+        if g1_real == g1_palpite or g2_real == g2_palpite:
+            pontos += 1
+        return pontos
+
+    cursor.execute('SELECT id, login FROM usuarios')
+    todos_usuarios = cursor.fetchall()
+
+    cursor.execute('''
+        SELECT p.usuario_id, j.jogo_id, j.gols_time1_real, j.gols_time2_real, p.gols_time1, p.gols_time2
+        FROM palpites p
+        INNER JOIN jogos j ON p.jogo_id = j.jogo_id
+        WHERE j.status = 'Encerrado'
+    ''')
+    todos_palpites = cursor.fetchall()
+    
+    cursor.execute("SELECT jogo_id FROM jogos WHERE status = 'Encerrado'")
+    jogos_encerrados_bruto = cursor.fetchall()
+    conn.close()
+    
+    lista_jogos = [j[0] for j in jogos_encerrados_bruto]
+    try:
+        lista_jogos.sort(key=lambda x: int(x.split('_')[1]))
+    except Exception:
+        lista_jogos.sort()
+
+    palpites_estruturados = {int(u[0]): {} for u in todos_usuarios}
+    for u_id_bruto, jogo_id, g1_r, g2_r, g1_p, g2_p in todos_palpites:
+        u_id = int(u_id_bruto)
+        if u_id in palpites_estruturados:
+            palpites_estruturados[u_id][jogo_id] = (g1_r, g2_r, g1_p, g2_p)
+
+    # Lista de cores dinâmicas para o gráfico não repetir cores iguais lado a lado
+    paleta_cores = [
+        '#2b7a78', '#d97706', '#3b82f6', '#10b981', '#ef4444', '#8b5cf6', 
+        '#ec4899', '#f59e0b', '#6366f1', '#14b8a6', '#a855f7', '#06b6d4'
+    ]
+
+    linhas_grafico = []
+    for index, (u_id_bruto, login) in enumerate(todos_usuarios):
+        u_id = int(u_id_bruto)
+        pontos_acumulados = 0
+        pontos_eixo_y = []
+        
+        for jogo_id in lista_jogos:
+            if jogo_id in palpites_estruturados[u_id]:
+                try:
+                    g1_real = int(palpites_estruturados[u_id][jogo_id][0])
+                    g2_real = int(palpites_estruturados[u_id][jogo_id][1])
+                    g1_palpite = int(palpites_estruturados[u_id][jogo_id][2])
+                    g2_palpite = int(palpites_estruturados[u_id][jogo_id][3])
+                except (ValueError, TypeError):
+                    pontos_eixo_y.append(pontos_acumulados)
+                    continue
+
+                pontos_acumulados += calcular_pontos_oficial(g1_real, g2_real, g1_palpite, g2_palpite)
+            
+            pontos_eixo_y.append(pontos_acumulados)
+            
+        cor_linha = paleta_cores[index % len(paleta_cores)]
+        
+        linhas_grafico.append({
+            'label': login,
+            'dados': pontos_eixo_y,
+            'cor': cor_linha
+        })
+        
+    eixo_x_formatado = [f"Jogo {j.split('_')[1]}" if '_' in j else j for j in lista_jogos]
+    
+    return jsonify({
+        'partidas': eixo_x_formatado,
+        'linhas': linhas_grafico
+    })
 
 # 🚪 ROTA: Logout
 @app.route('/logout')
