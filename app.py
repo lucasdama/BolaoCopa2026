@@ -237,6 +237,12 @@ def palpites():
             CASE WHEN j.etapa LIKE 'Fase de Grupos%' THEN j.data_hora ELSE '' END ASC,
             CAST(SUBSTR(j.jogo_id, 6) AS INTEGER) ASC
     '''
+    print("QUERY:")
+    print(query_select)
+
+    print("USUARIO_ID:")
+    print(usuario_id)
+    print(type(usuario_id))
     cursor.execute(query_select, (usuario_id,))
     jogos = cursor.fetchall()
     
