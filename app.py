@@ -39,7 +39,9 @@ def obter_cursor(conn):
 # 📝 ADAPTADOR DINÂMICO DE QUERIES (?, ? vs %s, %s)
 def preparar_query(query):
     if os.environ.get('DATABASE_URL'):
-        return query.replace('?', '%s')
+        # 🧹 Remove comentários SQL de linha (ex: -- comentário) para o '?' do texto não quebrar o replace
+        query_limpa = re.sub(r'--.*$', '', query, flags=re.MULTILINE)
+        return query_limpa.replace('?', '%s')
     return query
 
 def inicializar_db():
@@ -217,14 +219,16 @@ def palpites():
         return redirect(url_for('palpites'))
 
     # 🔍 BUSCA DOS JOGOS
-    query_select = preparar_query('''
+    placeholder = '%s' if "DATABASE_URL" in os.environ else '?'
+    
+    query_select = f'''
         SELECT 
             j.jogo_id, j.time1, j.time2, j.etapa, j.data_hora, j.cidade, j.status,
             j.flag_code_time1, j.flag_code_time2,
             j.gols_time1_real, j.gols_time2_real,
             p.gols_time1 AS gols_time1_palpite, p.gols_time2 AS gols_time2_palpite
         FROM jogos j
-        LEFT JOIN palpites p ON j.jogo_id = p.jogo_id AND p.usuario_id = ?
+        LEFT JOIN palpites p ON j.jogo_id = p.jogo_id AND p.usuario_id = {placeholder}
         ORDER BY 
             -- Se for Fase de Grupos, agrupa por etapa e ordena por data_hora
             CASE WHEN j.etapa LIKE 'Fase de Grupos%' THEN j.etapa ELSE 'Mata-Mata' END ASC,
@@ -232,7 +236,7 @@ def palpites():
             
             -- Se for Mata-Mata (Jogo 73 para frente), ordena estritamente pelo número do ID
             CAST(SUBSTR(j.jogo_id, 6) AS INTEGER) ASC
-    ''')
+    '''
     cursor.execute(query_select, (usuario_id,))
     jogos = cursor.fetchall()
     
