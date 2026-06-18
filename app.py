@@ -220,9 +220,10 @@ def palpites():
         return redirect(url_for('palpites'))
 
     # 🔍 BUSCA DOS JOGOS
-    tipo_cursor = type(cursor).__name__
-    placeholder = '%s' if 'psycopg2' in tipo_cursor.lower() or 'extensions' in tipo_cursor.lower() else '?'
+    tipo_cursor = type(cursor).__name__.lower()
+    placeholder = '%s' if 'psycopg2' in tipo_cursor or 'cursor' in tipo_cursor else '?'
     
+    # IMPORTANTE: Use f''' (com f no início) e NÃO use preparar_query aqui!
     query_select = f'''
         SELECT 
             j.jogo_id, j.time1, j.time2, j.etapa, j.data_hora, j.cidade, j.status,
@@ -232,11 +233,8 @@ def palpites():
         FROM jogos j
         LEFT JOIN palpites p ON j.jogo_id = p.jogo_id AND p.usuario_id = {placeholder}
         ORDER BY 
-            -- Se for Fase de Grupos, agrupa por etapa e ordena por data_hora
             CASE WHEN j.etapa LIKE 'Fase de Grupos%' THEN j.etapa ELSE 'Mata-Mata' END ASC,
             CASE WHEN j.etapa LIKE 'Fase de Grupos%' THEN j.data_hora ELSE '' END ASC,
-            
-            -- Se for Mata-Mata (Jogo 73 para frente), ordena estritamente pelo número do ID
             CAST(SUBSTR(j.jogo_id, 6) AS INTEGER) ASC
     '''
     cursor.execute(query_select, (usuario_id,))
