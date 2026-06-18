@@ -41,6 +41,8 @@ def obter_cursor(conn):
 def preparar_query(query):
     if os.environ.get('DATABASE_URL'):
         query = re.sub(r'--.*$', '', query, flags=re.MULTILINE)
+        # psycopg2 usa % para placeholders; % literais em LIKE precisam ser escapados.
+        query = query.replace('%', '%%')
         query = re.sub(r'(?<!\w)\?(?!\w)', '%s', query)
     return query
 
@@ -222,7 +224,7 @@ def palpites():
     tipo_cursor = type(cursor).__name__.lower()
     placeholder = '%s' if 'psycopg2' in tipo_cursor or 'cursor' in tipo_cursor else '?'
     
-    # IMPORTANTE: Use f''' (com f no início) e NÃO use preparar_query aqui!
+    # Usa preparar_query para adaptar placeholders do SQLite (?) para PostgreSQL (%s).
     query_select = preparar_query("""
         SELECT
             j.jogo_id, j.time1, j.time2, j.etapa, j.data_hora, j.cidade, j.status,
