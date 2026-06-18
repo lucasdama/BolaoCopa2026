@@ -219,6 +219,8 @@ def palpites():
     query_select = preparar_query('''
         SELECT 
             j.jogo_id, j.time1, j.time2, j.etapa, j.data_hora, j.cidade, j.status,
+            j.flag_code_time1,  -- 👈 INSERIDO AQUI
+            j.flag_code_time2,  -- 👈 INSERIDO AQUI
             j.gols_time1_real, j.gols_time2_real,
             p.gols_time1 AS gols_time1_palpite, p.gols_time2 AS gols_time2_palpite
         FROM jogos j
