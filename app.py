@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from pontuacao import calcular_pontos
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask import jsonify, session
+from chaveamento import atualizar_chaveamento_completo
 
 app = Flask(__name__)
 app.secret_key = 'chave_secreta_copa_2026_super_protegida'
@@ -219,17 +220,36 @@ def palpites():
     query_select = preparar_query('''
         SELECT 
             j.jogo_id, j.time1, j.time2, j.etapa, j.data_hora, j.cidade, j.status,
-            j.flag_code_time1,  -- 👈 INSERIDO AQUI
-            j.flag_code_time2,  -- 👈 INSERIDO AQUI
+            j.flag_code_time1, j.flag_code_time2,
             j.gols_time1_real, j.gols_time2_real,
             p.gols_time1 AS gols_time1_palpite, p.gols_time2 AS gols_time2_palpite
         FROM jogos j
         LEFT JOIN palpites p ON j.jogo_id = p.jogo_id AND p.usuario_id = ?
-        ORDER BY j.data_hora ASC
+        ORDER BY 
+            -- Se for Fase de Grupos, agrupa por etapa e ordena por data_hora
+            CASE WHEN j.etapa LIKE 'Fase de Grupos%' THEN j.etapa ELSE 'Mata-Mata' END ASC,
+            CASE WHEN j.etapa LIKE 'Fase de Grupos%' THEN j.data_hora ELSE '' END ASC,
+            
+            -- Se for Mata-Mata (Jogo 73 para frente), ordena estritamente pelo número do ID
+            CAST(SUBSTR(j.jogo_id, 6) AS INTEGER) ASC
     ''')
     cursor.execute(query_select, (usuario_id,))
     jogos = cursor.fetchall()
     
+# 🚨 TRECHO TEMPORÁRIO PARA DEBUG NO TERMINAL 🚨
+    print("\n" + "="*60)
+    print("🔍 VERIFICANDO JOGOS DO MATA-MATA (JOGO 73 EM DIANTE):")
+    print("="*60)
+    for row in jogos:
+        j = dict(row)
+        try:
+            num_jogo = int(j['jogo_id'].split('_')[1])
+            if num_jogo >= 73:
+                print(f"ID: {j['jogo_id']} | Etapa: {j['etapa']} | {j['time1']} ({j['flag_code_time1']}) X {j['time2']} ({j['flag_code_time2']}) | Status: {j['status']}")
+        except Exception as e:
+            pass
+    print("="*60 + "\n")
+
     etapas_ordem = [
         "Fase de Grupos Rodada 1", "Fase de Grupos Rodada 2", "Fase de Grupos Rodada 3",
         "Dezesseis-avos de final", "Oitavas de final", "Quartas de final", "Semifinais",
@@ -348,7 +368,6 @@ def ranking():
     
     return render_template('ranking.html', usuarios_ranking=ranking_ordenado)
 
-# 👑 ROTA: Painel do Administrador (Ajustada para o seu HTML original)
 @app.route('/admin', methods=['GET', 'POST'])
 def admin():
     if 'usuario_id' not in session:
@@ -387,17 +406,47 @@ def admin():
                     WHERE jogo_id = ?
                 ''')
                 cursor.execute(query_end, (int(gols_t1), int(gols_t2), jogo_id))
-                print(f"✅ Jogo {jogo_id} ENCERRADO.")
+                print(f"✅ Jogo {jogo_id} ENCERRADO no banco local.")
                 flash('Resultado gravado e jogo encerrado com sucesso!')
+
+                # 🛠️ O DETETIVE ENTRA EXATAMENTE AQUI:
+                try:
+                    print("\n🔍 [DIAGNÓSTICO] Quais tabelas existem nesta conexão?")
+                    cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+                    tabelas = cursor.fetchall()
+                    
+                    # Tenta ler formato dicionário ou tupla pura do SQLite
+                    nomes_tabelas = []
+                    for t in tabelas:
+                        if isinstance(t, dict): nomes_tabelas.append(t['name'])
+                        elif hasattr(t, 'keys') and 'name' in t.keys(): nomes_tabelas.append(t['name'])
+                        else: nomes_tabelas.append(t[0])
+                        
+                    print(f"📋 Tabelas encontradas no banco: {nomes_tabelas}")
+                    
+                    print("🏆 Disparando recálculo automático da árvore de mata-mata...")
+                    is_pg = "DATABASE_URL" in os.environ
+                    atualizar_chaveamento_completo(cursor, is_postgres=is_pg)
+                    print("✅ Árvore de mata-mata atualizada com sucesso no lote atual!")
+                except Exception as e:
+                    print(f"❌ Erro crítico ao atualizar o chaveamento: {e}")
             else:
                 flash('Erro: Você precisa digitar os gols antes de encerrar!')
                 
+        # 💾 O commit agora salva o placar DO JOGO + O CHAVEAMENTO recalculado juntos!
         conn.commit()
         conn.close()
         print("=== 💾 ALTERAÇÕES SALVAS COM COMMIT ===\n")
         return redirect(url_for('admin'))
         
-    cursor.execute('SELECT * FROM jogos ORDER BY data_hora ASC')
+    # 🔍 BUSCA E ORDENAÇÃO INTELIGENTE (Fase de Grupos por Data | Mata-Mata por ID)
+    cursor.execute('''
+        SELECT * FROM jogos 
+        ORDER BY 
+            CASE WHEN etapa LIKE 'Fase de Grupos%' THEN etapa ELSE 'Mata-Mata' END ASC,
+            CASE WHEN etapa LIKE 'Fase de Grupos%' THEN data_hora ELSE '' END ASC,
+            CAST(SUBSTR(jogo_id, 6) AS INTEGER) ASC
+    ''')
     jogos = cursor.fetchall()
     conn.close()
     
@@ -416,6 +465,8 @@ def admin():
         jogos_agrupados[etapa_jogo].append(jogo)
         
     return render_template('admin.html', jogos_agrupados=jogos_agrupados)
+
+#ROTA: Visualizar Palpites de um Amigo (Ajustada para o seu HTML original)
 
 @app.route('/palpites_amigo/<amigo_id>')
 def palpites_amigo(amigo_id):
