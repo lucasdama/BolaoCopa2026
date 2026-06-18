@@ -2,6 +2,7 @@ from flask import Flask, render_template, request, redirect, url_for, flash, ses
 import os
 import sqlite3
 import psycopg2
+import re
 from psycopg2.extras import DictCursor
 from datetime import datetime, timedelta
 from pontuacao import calcular_pontos
