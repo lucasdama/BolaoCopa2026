@@ -220,7 +220,8 @@ def palpites():
         return redirect(url_for('palpites'))
 
     # 🔍 BUSCA DOS JOGOS
-    placeholder = '%s' if "DATABASE_URL" in os.environ else '?'
+    tipo_cursor = type(cursor).__name__
+    placeholder = '%s' if 'psycopg2' in tipo_cursor.lower() or 'extensions' in tipo_cursor.lower() else '?'
     
     query_select = f'''
         SELECT 
@@ -372,6 +373,8 @@ def ranking():
     print(f"📊 DADOS ENVIADOS PARA O HTML: {ranking_ordenado}")
     
     return render_template('ranking.html', usuarios_ranking=ranking_ordenado)
+
+#ROTA: Admin (Iniciar/Encerrar Jogos e Lançar Resultados) - Versão Blindada com Diagnóstico Detalhado
 
 @app.route('/admin', methods=['GET', 'POST'])
 def admin():
