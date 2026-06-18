@@ -40,9 +40,8 @@ def obter_cursor(conn):
 # 📝 ADAPTADOR DINÂMICO DE QUERIES (?, ? vs %s, %s)
 def preparar_query(query):
     if os.environ.get('DATABASE_URL'):
-        # 🧹 Remove comentários SQL de linha (ex: -- comentário) para o '?' do texto não quebrar o replace
-        query_limpa = re.sub(r'--.*$', '', query, flags=re.MULTILINE)
-        return query_limpa.replace('?', '%s')
+        query = re.sub(r'--.*$', '', query, flags=re.MULTILINE)
+        query = re.sub(r'(?<!\w)\?(?!\w)', '%s', query)
     return query
 
 def inicializar_db():
@@ -224,19 +223,23 @@ def palpites():
     placeholder = '%s' if 'psycopg2' in tipo_cursor or 'cursor' in tipo_cursor else '?'
     
     # IMPORTANTE: Use f''' (com f no início) e NÃO use preparar_query aqui!
-    query_select = f'''
-        SELECT 
+    query_select = preparar_query("""
+        SELECT
             j.jogo_id, j.time1, j.time2, j.etapa, j.data_hora, j.cidade, j.status,
             j.flag_code_time1, j.flag_code_time2,
             j.gols_time1_real, j.gols_time2_real,
-            p.gols_time1 AS gols_time1_palpite, p.gols_time2 AS gols_time2_palpite
+            p.gols_time1 AS gols_time1_palpite,
+            p.gols_time2 AS gols_time2_palpite
         FROM jogos j
-        LEFT JOIN palpites p ON j.jogo_id = p.jogo_id AND p.usuario_id = {placeholder}
-        ORDER BY 
+        LEFT JOIN palpites p
+            ON j.jogo_id = p.jogo_id
+            AND p.usuario_id = ?
+        ORDER BY
             CASE WHEN j.etapa LIKE 'Fase de Grupos%' THEN j.etapa ELSE 'Mata-Mata' END ASC,
             CASE WHEN j.etapa LIKE 'Fase de Grupos%' THEN j.data_hora ELSE '' END ASC,
             CAST(SUBSTR(j.jogo_id, 6) AS INTEGER) ASC
-    '''
+    """)
+
     print("QUERY:")
     print(query_select)
 
