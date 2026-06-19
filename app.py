@@ -37,6 +37,9 @@ def obter_cursor(conn):
     else:
         return conn.cursor()
 
+def eh_postgres(conn):
+    return conn.__class__.__module__.startswith('psycopg2')
+
 # 📝 ADAPTADOR DINÂMICO DE QUERIES (?, ? vs %s, %s)
 def preparar_query(query):
     if os.environ.get('DATABASE_URL'):
@@ -403,13 +406,18 @@ def admin():
                     WHERE jogo_id = ?
                 ''')
                 cursor.execute(query_end, (int(gols_t1), int(gols_t2), jogo_id))
-                print(f"✅ Jogo {jogo_id} ENCERRADO no banco local.")
+                conn.commit()
+                is_pg = eh_postgres(conn)
+                print(f"✅ Jogo {jogo_id} ENCERRADO no banco {'Render/PostgreSQL' if is_pg else 'local/SQLite'}.")
                 flash('Resultado gravado e jogo encerrado com sucesso!')
 
                 # 🛠️ O DETETIVE ENTRA EXATAMENTE AQUI:
                 try:
                     print("\n🔍 [DIAGNÓSTICO] Quais tabelas existem nesta conexão?")
-                    cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+                    if is_pg:
+                        cursor.execute("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' ORDER BY table_name")
+                    else:
+                        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
                     tabelas = cursor.fetchall()
                     
                     # Tenta ler formato dicionário ou tupla pura do SQLite
@@ -417,15 +425,17 @@ def admin():
                     for t in tabelas:
                         if isinstance(t, dict): nomes_tabelas.append(t['name'])
                         elif hasattr(t, 'keys') and 'name' in t.keys(): nomes_tabelas.append(t['name'])
+                        elif hasattr(t, 'keys') and 'table_name' in t.keys(): nomes_tabelas.append(t['table_name'])
                         else: nomes_tabelas.append(t[0])
                         
                     print(f"📋 Tabelas encontradas no banco: {nomes_tabelas}")
                     
                     print("🏆 Disparando recálculo automático da árvore de mata-mata...")
-                    is_pg = "DATABASE_URL" in os.environ
                     atualizar_chaveamento_completo(cursor, is_postgres=is_pg)
+                    conn.commit()
                     print("✅ Árvore de mata-mata atualizada com sucesso no lote atual!")
                 except Exception as e:
+                    conn.rollback()
                     print(f"❌ Erro crítico ao atualizar o chaveamento: {e}")
             else:
                 flash('Erro: Você precisa digitar os gols antes de encerrar!')
