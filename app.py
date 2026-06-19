@@ -242,29 +242,9 @@ def palpites():
             CAST(SUBSTR(j.jogo_id, 6) AS INTEGER) ASC
     """)
 
-    print("QUERY:")
-    print(query_select)
-
-    print("USUARIO_ID:")
-    print(usuario_id)
-    print(type(usuario_id))
     cursor.execute(query_select, (usuario_id,))
     jogos = cursor.fetchall()
     
-# 🚨 TRECHO TEMPORÁRIO PARA DEBUG NO TERMINAL 🚨
-    print("\n" + "="*60)
-    print("🔍 VERIFICANDO JOGOS DO MATA-MATA (JOGO 73 EM DIANTE):")
-    print("="*60)
-    for row in jogos:
-        j = dict(row)
-        try:
-            num_jogo = int(j['jogo_id'].split('_')[1])
-            if num_jogo >= 73:
-                print(f"ID: {j['jogo_id']} | Etapa: {j['etapa']} | {j['time1']} ({j['flag_code_time1']}) X {j['time2']} ({j['flag_code_time2']}) | Status: {j['status']}")
-        except Exception as e:
-            pass
-    print("="*60 + "\n")
-
     etapas_ordem = [
         "Fase de Grupos Rodada 1", "Fase de Grupos Rodada 2", "Fase de Grupos Rodada 3",
         "Dezesseis-avos de final", "Oitavas de final", "Quartas de final", "Semifinais",
