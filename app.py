@@ -164,6 +164,15 @@ def inicializar_db():
                 cidade TEXT
             )
         ''')
+    # Migração: adiciona coluna 'ativo' caso ainda não exista
+    try:
+        if os.environ.get('DATABASE_URL'):
+            cursor.execute("ALTER TABLE usuarios ADD COLUMN ativo INTEGER DEFAULT 1")
+        else:
+            cursor.execute("ALTER TABLE usuarios ADD COLUMN ativo INTEGER DEFAULT 1")
+    except Exception:
+        pass  # coluna já existe
+
     conn.commit()
     conn.close()
 
@@ -183,9 +192,13 @@ def login():
         conn.close()
         
         if usuario and check_password_hash(usuario['senha'], senha_user):
-            session['usuario_id'] = usuario['id']
-            session['usuario_login'] = usuario['login']
-            return redirect(url_for('palpites'))
+            ativo = usuario['ativo'] if 'ativo' in usuario.keys() else 1
+            if not ativo:
+                flash('Conta inativa. Entre em contato com o administrador.')
+            else:
+                session['usuario_id'] = usuario['id']
+                session['usuario_login'] = usuario['login']
+                return redirect(url_for('palpites'))
         else:
             flash('Login ou senha incorretos!')
             
@@ -519,6 +532,68 @@ def admin():
         jogos_agrupados[etapa_jogo].append(jogo)
         
     return render_template('admin.html', jogos_agrupados=jogos_agrupados)
+
+# 👥 ROTA: Gerenciamento de Usuários (Admin)
+@app.route('/admin/usuarios', methods=['GET', 'POST'])
+def admin_usuarios():
+    if 'usuario_id' not in session or session.get('usuario_login') != 'Lucas':
+        flash('Acesso negado!')
+        return redirect(url_for('login'))
+
+    conn = obter_conexao_db()
+    cursor = obter_cursor(conn)
+
+    if request.method == 'POST':
+        acao = request.form.get('acao')
+        usuario_id = request.form.get('usuario_id')
+
+        if acao == 'excluir':
+            q_del_palpites = preparar_query("DELETE FROM palpites WHERE usuario_id = ?")
+            cursor.execute(q_del_palpites, (usuario_id,))
+            q_del_user = preparar_query("DELETE FROM usuarios WHERE id = ?")
+            cursor.execute(q_del_user, (usuario_id,))
+            conn.commit()
+            flash('Usuário excluído com sucesso.')
+
+        elif acao == 'inativar':
+            q = preparar_query("UPDATE usuarios SET ativo = 0 WHERE id = ?")
+            cursor.execute(q, (usuario_id,))
+            conn.commit()
+            flash('Usuário inativado. Ele não conseguirá mais fazer login.')
+
+        elif acao == 'ativar':
+            q = preparar_query("UPDATE usuarios SET ativo = 1 WHERE id = ?")
+            cursor.execute(q, (usuario_id,))
+            conn.commit()
+            flash('Usuário reativado com sucesso.')
+
+        elif acao == 'redefinir_senha':
+            nova_senha = request.form.get('nova_senha', '').strip()
+            if not nova_senha:
+                flash('Informe a nova senha.')
+            else:
+                nova_hash = generate_password_hash(nova_senha)
+                q = preparar_query("UPDATE usuarios SET senha = ? WHERE id = ?")
+                cursor.execute(q, (nova_hash, usuario_id))
+                conn.commit()
+                flash('Senha redefinida com sucesso.')
+
+        conn.close()
+        return redirect(url_for('admin_usuarios'))
+
+    cursor.execute("SELECT id, login, COALESCE(ativo, 1) as ativo FROM usuarios ORDER BY login ASC")
+    usuarios = cursor.fetchall()
+
+    # Conta palpites por usuário para exibição
+    contagem_palpites = {}
+    for u in usuarios:
+        q = preparar_query("SELECT COUNT(*) as total FROM palpites WHERE usuario_id = ?")
+        cursor.execute(q, (u['id'],))
+        row = cursor.fetchone()
+        contagem_palpites[u['id']] = row['total'] if row else 0
+
+    conn.close()
+    return render_template('admin_usuarios.html', usuarios=usuarios, contagem_palpites=contagem_palpites)
 
 #ROTA: Visualizar Palpites de um Amigo (Ajustada para o seu HTML original)
 

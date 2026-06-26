@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Gerenciar Usuários - Admin</title>
+    <style>
+        * { box-sizing: border-box; }
+        body { font-family: 'Segoe UI', sans-serif; background: #f4f7f6; max-width: 860px; margin: 30px auto; padding: 20px; }
+
+        h2 { color: #17252a; margin-bottom: 4px; }
+        .subtitulo { color: #718096; font-size: 14px; margin-bottom: 24px; }
+
+        .alert { color: #155724; background: #d4edda; padding: 12px 16px; margin-bottom: 20px; border-radius: 6px; font-weight: bold; }
+        .alert.danger { color: #721c24; background: #f8d7da; }
+
+        .card-usuario {
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 16px 20px;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+        .card-usuario.inativo { opacity: 0.6; border-left: 4px solid #e53e3e; }
+        .card-usuario.ativo { border-left: 4px solid #38a169; }
+
+        .usuario-info { flex: 1; min-width: 160px; }
+        .usuario-nome { font-weight: bold; font-size: 16px; color: #2d3748; }
+        .usuario-meta { font-size: 12px; color: #718096; margin-top: 2px; }
+
+        .badge {
+            font-size: 11px; font-weight: bold; padding: 2px 8px;
+            border-radius: 12px; white-space: nowrap;
+        }
+        .badge-ativo { background: #c6f6d5; color: #276749; }
+        .badge-inativo { background: #fed7d7; color: #9b2c2c; }
+
+        .acoes { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+
+        button, .btn {
+            padding: 7px 14px; border: none; border-radius: 5px;
+            font-size: 13px; font-weight: bold; cursor: pointer;
+        }
+        .btn-inativar  { background: #ed8936; color: white; }
+        .btn-ativar    { background: #38a169; color: white; }
+        .btn-excluir   { background: #e53e3e; color: white; }
+        .btn-senha     { background: #3182ce; color: white; }
+        button:hover   { opacity: 0.85; }
+
+        /* Modal de confirmação */
+        .modal-overlay {
+            display: none; position: fixed; inset: 0;
+            background: rgba(0,0,0,0.5); z-index: 1000;
+            align-items: center; justify-content: center;
+        }
+        .modal-overlay.aberto { display: flex; }
+        .modal {
+            background: white; border-radius: 10px; padding: 28px 32px;
+            max-width: 420px; width: 90%; box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+        }
+        .modal h3 { margin-top: 0; color: #2d3748; }
+        .modal p  { color: #4a5568; font-size: 14px; }
+        .modal-acoes { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
+        .btn-cancelar { background: #e2e8f0; color: #4a5568; }
+
+        /* Modal de redefinir senha */
+        .modal input[type=text], .modal input[type=password] {
+            width: 100%; padding: 9px 12px; font-size: 14px;
+            border: 1px solid #cbd5e0; border-radius: 5px; margin-top: 8px;
+        }
+
+        .nav-links { margin-bottom: 20px; display: flex; gap: 16px; }
+        .nav-links a { color: #2b7a78; text-decoration: none; font-weight: bold; font-size: 14px; }
+        .nav-links a:hover { text-decoration: underline; }
+
+        .contador { color: #718096; font-size: 13px; margin-bottom: 16px; }
+    </style>
+</head>
+<body>
+
+    <div class="nav-links">
+        <a href="/admin">← Painel de Jogos</a>
+        <a href="/ranking">← Ranking</a>
+    </div>
+
+    <h2>👥 Gerenciar Usuários</h2>
+    <p class="subtitulo">Inative, exclua ou redefina a senha dos participantes do bolão.</p>
+
+    {% with messages = get_flashed_messages() %}
+        {% if messages %}
+            <div class="alert">{{ messages[0] }}</div>
+        {% endif %}
+    {% endwith %}
+
+    <p class="contador">{{ usuarios|length }} usuário(s) cadastrado(s)</p>
+
+    {% for u in usuarios %}
+    <div class="card-usuario {{ 'inativo' if not u['ativo'] else 'ativo' }}">
+
+        <div class="usuario-info">
+            <div class="usuario-nome">{{ u['login'] }}</div>
+            <div class="usuario-meta">{{ contagem_palpites[u['id']] }} palpite(s) registrado(s)</div>
+        </div>
+
+        <span class="badge {{ 'badge-ativo' if u['ativo'] else 'badge-inativo' }}">
+            {{ 'Ativo' if u['ativo'] else 'Inativo' }}
+        </span>
+
+        <div class="acoes">
+            {% if u['ativo'] %}
+            <button class="btn-inativar"
+                onclick="abrirModalInativar('{{ u['id'] }}', '{{ u['login'] }}')">
+                🔒 Inativar
+            </button>
+            {% else %}
+            <form method="POST" style="display:inline">
+                <input type="hidden" name="acao" value="ativar">
+                <input type="hidden" name="usuario_id" value="{{ u['id'] }}">
+                <button type="submit" class="btn-ativar">🔓 Reativar</button>
+            </form>
+            {% endif %}
+
+            <button class="btn-senha"
+                onclick="abrirModalSenha('{{ u['id'] }}', '{{ u['login'] }}')">
+                🔑 Redefinir Senha
+            </button>
+
+            <button class="btn-excluir"
+                onclick="abrirModalExcluir('{{ u['id'] }}', '{{ u['login'] }}', {{ contagem_palpites[u['id']] }})">
+                🗑️ Excluir
+            </button>
+        </div>
+    </div>
+    {% endfor %}
+
+
+    <!-- Modal: Confirmar Inativação -->
+    <div id="modalInativar" class="modal-overlay">
+        <div class="modal">
+            <h3>🔒 Inativar Usuário</h3>
+            <p>O usuário <strong id="nomeInativar"></strong> não conseguirá mais fazer login. Os palpites dele serão mantidos.</p>
+            <form method="POST" id="formInativar">
+                <input type="hidden" name="acao" value="inativar">
+                <input type="hidden" name="usuario_id" id="idInativar">
+                <div class="modal-acoes">
+                    <button type="button" class="btn btn-cancelar" onclick="fecharModais()">Cancelar</button>
+                    <button type="submit" class="btn btn-inativar">Confirmar Inativação</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Redefinir Senha -->
+    <div id="modalSenha" class="modal-overlay">
+        <div class="modal">
+            <h3>🔑 Redefinir Senha</h3>
+            <p>Nova senha para <strong id="nomeSenha"></strong>:</p>
+            <form method="POST" id="formSenha">
+                <input type="hidden" name="acao" value="redefinir_senha">
+                <input type="hidden" name="usuario_id" id="idSenha">
+                <input type="password" name="nova_senha" placeholder="Nova senha" required minlength="4" autocomplete="new-password">
+                <div class="modal-acoes">
+                    <button type="button" class="btn btn-cancelar" onclick="fecharModais()">Cancelar</button>
+                    <button type="submit" class="btn btn-senha">Salvar Senha</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Confirmar Exclusão -->
+    <div id="modalExcluir" class="modal-overlay">
+        <div class="modal">
+            <h3>🗑️ Excluir Usuário</h3>
+            <p>Tem certeza que deseja excluir <strong id="nomeExcluir"></strong>? Esta ação é <strong>irreversível</strong> e todos os palpites do usuário (<span id="qtdPalpites"></span> no total) serão apagados.</p>
+            <form method="POST" id="formExcluir">
+                <input type="hidden" name="acao" value="excluir">
+                <input type="hidden" name="usuario_id" id="idExcluir">
+                <div class="modal-acoes">
+                    <button type="button" class="btn btn-cancelar" onclick="fecharModais()">Cancelar</button>
+                    <button type="submit" class="btn btn-excluir">Sim, Excluir</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        function fecharModais() {
+            document.querySelectorAll('.modal-overlay').forEach(m => m.classList.remove('aberto'));
+        }
+        function abrirModalInativar(id, nome) {
+            document.getElementById('idInativar').value = id;
+            document.getElementById('nomeInativar').textContent = nome;
+            document.getElementById('modalInativar').classList.add('aberto');
+        }
+        function abrirModalSenha(id, nome) {
+            document.getElementById('idSenha').value = id;
+            document.getElementById('nomeSenha').textContent = nome;
+            document.getElementById('modalSenha').classList.add('aberto');
+            document.querySelector('#modalSenha input[type=password]').value = '';
+        }
+        function abrirModalExcluir(id, nome, qtd) {
+            document.getElementById('idExcluir').value = id;
+            document.getElementById('nomeExcluir').textContent = nome;
+            document.getElementById('qtdPalpites').textContent = qtd;
+            document.getElementById('modalExcluir').classList.add('aberto');
+        }
+        // Fechar clicando fora do modal
+        document.querySelectorAll('.modal-overlay').forEach(overlay => {
+            overlay.addEventListener('click', e => {
+                if (e.target === overlay) fecharModais();
+            });
+        });
+    </script>
+</body>
+</html>
