@@ -1003,6 +1003,262 @@ def evolucao_pontos_completo():
         'linhas': linhas_grafico
     })
 
+# 🎯 ROTA: Dashboard de Desempenho (página)
+@app.route('/dashboard')
+def dashboard():
+    if 'usuario_id' not in session:
+        return redirect(url_for('login'))
+    return render_template('dashboard.html')
+
+
+# 🎯 ROTA: API do Dashboard
+@app.route('/api/dashboard')
+def api_dashboard():
+    if 'usuario_id' not in session:
+        return jsonify({'erro': 'Não autorizado'}), 401
+
+    try:
+        uid_logado = int(session['usuario_id'])
+    except (ValueError, TypeError):
+        uid_logado = session['usuario_id']
+
+    conn  = obter_conexao_db()
+    cursor = obter_cursor(conn)
+
+    cursor.execute("SELECT id, login FROM usuarios ORDER BY login ASC")
+    usuarios = [dict(u) for u in cursor.fetchall()]
+
+    q_jogos = preparar_query(
+        "SELECT * FROM jogos WHERE status = 'Encerrado' AND gols_time1_real IS NOT NULL "
+        "ORDER BY data_hora ASC"
+    )
+    cursor.execute(q_jogos)
+    jogos = [dict(j) for j in cursor.fetchall()]
+
+    cursor.execute("SELECT * FROM palpites")
+    todos_palpites = cursor.fetchall()
+    conn.close()
+
+    # Mapa de palpites: {uid: {jogo_id: (g1, g2)}}
+    mapa = {}
+    for p in todos_palpites:
+        uid  = p['usuario_id']
+        jid  = p['jogo_id']
+        if uid not in mapa:
+            mapa[uid] = {}
+        mapa[uid][jid] = (p['gols_time1'], p['gols_time2'])
+
+    def _pts_tipo(g1r, g2r, g1p, g2p):
+        """Retorna (pontos, tipo) onde tipo é 'exato'|'vencedor'|'errou'."""
+        g1r, g2r, g1p, g2p = int(g1r), int(g2r), int(g1p), int(g2p)
+        if g1r == g1p and g2r == g2p:
+            return 10, 'exato'
+        pts = 0
+        vr = 't1' if g1r > g2r else 't2' if g2r > g1r else 'e'
+        vp = 't1' if g1p > g2p else 't2' if g2p > g1p else 'e'
+        if vr == vp:
+            pts += 5
+            if (g1r - g2r) == (g1p - g2p):
+                pts += 2
+        if g1r == g1p or g2r == g2p:
+            pts += 1
+        return pts, ('vencedor' if pts >= 5 else 'errou')
+
+    # ── Média do grupo por jogo ────────────────────────────────────────────────
+    media_grupo = {}  # jogo_id -> float
+    for j in jogos:
+        jid  = j['jogo_id']
+        soma = 0
+        cnt  = 0
+        for u in usuarios:
+            pal = mapa.get(u['id'], {}).get(jid)
+            if pal:
+                try:
+                    pts, _ = _pts_tipo(j['gols_time1_real'], j['gols_time2_real'], pal[0], pal[1])
+                    soma += pts
+                    cnt  += 1
+                except (ValueError, TypeError):
+                    pass
+        media_grupo[jid] = round(soma / cnt, 1) if cnt else 0
+
+    # ── INDIVIDUAL ─────────────────────────────────────────────────────────────
+    etapas_ordem = [
+        "Fase de Grupos Rodada 1", "Fase de Grupos Rodada 2", "Fase de Grupos Rodada 3",
+        "Dezesseis-avos de final", "Oitavas de final", "Quartas de final",
+        "Semifinais", "Disputa de terceiro lugar", "Final"
+    ]
+    etapa_abrev = {
+        "Fase de Grupos Rodada 1": "FG R1", "Fase de Grupos Rodada 2": "FG R2",
+        "Fase de Grupos Rodada 3": "FG R3", "Dezesseis-avos de final": "16-avos",
+        "Oitavas de final": "Oitavas", "Quartas de final": "Quartas",
+        "Semifinais": "Semi", "Disputa de terceiro lugar": "3° Lugar", "Final": "Final"
+    }
+
+    taxa = {'exato': 0, 'vencedor': 0, 'errou': 0, 'sem_palpite': 0}
+    por_fase = {e: {'exato': 0, 'vencedor': 0, 'errou': 0, 'pts': 0, 'total': 0}
+                for e in etapas_ordem}
+    pts_por_jogo  = []   # para o gráfico de linha
+    dist_pontos   = {0: 0, 1: 0, 5: 0, 6: 0, 7: 0, 8: 0, 10: 0}
+    historico_streak = []  # cronológico (mais antigo primeiro)
+
+    for j in jogos:
+        jid   = j['jogo_id']
+        etapa = j['etapa']
+        label = f"{j['time1']} x {j['time2']}"
+        pal   = mapa.get(uid_logado, {}).get(jid)
+
+        if pal is None:
+            taxa['sem_palpite'] += 1
+            pts_por_jogo.append({'label': label, 'pts': None,
+                                 'media': media_grupo[jid], 'etapa': etapa})
+            historico_streak.append('sem_palpite')
+            continue
+        try:
+            pts, tipo = _pts_tipo(j['gols_time1_real'], j['gols_time2_real'], pal[0], pal[1])
+        except (ValueError, TypeError):
+            taxa['sem_palpite'] += 1
+            pts_por_jogo.append({'label': label, 'pts': None,
+                                 'media': media_grupo[jid], 'etapa': etapa})
+            historico_streak.append('sem_palpite')
+            continue
+
+        taxa[tipo] += 1
+        pts_por_jogo.append({'label': label, 'pts': pts,
+                             'media': media_grupo[jid], 'etapa': etapa})
+        historico_streak.append('acerto' if pts >= 5 else 'erro')
+
+        ef = por_fase.get(etapa) or por_fase.setdefault(etapa,
+             {'exato': 0, 'vencedor': 0, 'errou': 0, 'pts': 0, 'total': 0})
+        ef[tipo] += 1
+        ef['pts']   += pts
+        ef['total'] += 1
+        dist_pontos[pts] = dist_pontos.get(pts, 0) + 1
+
+    total_c_pal = taxa['exato'] + taxa['vencedor'] + taxa['errou']
+    taxa.update({
+        'total_encerrados': len(jogos),
+        'total_c_palpite':  total_c_pal,
+        'pct_exato':    round(taxa['exato']    / total_c_pal * 100, 1) if total_c_pal else 0,
+        'pct_vencedor': round(taxa['vencedor'] / total_c_pal * 100, 1) if total_c_pal else 0,
+        'pct_errou':    round(taxa['errou']    / total_c_pal * 100, 1) if total_c_pal else 0,
+    })
+
+    # Streak — contagem da sequência mais recente
+    streak_count = 0
+    streak_tipo  = None
+    for resultado in reversed(historico_streak):
+        if resultado == 'sem_palpite':
+            break
+        if streak_tipo is None:
+            streak_tipo  = resultado
+            streak_count = 1
+        elif resultado == streak_tipo:
+            streak_count += 1
+        else:
+            break
+
+    # Por fase: converte para array ordenado (apenas fases com jogos)
+    por_fase_array = []
+    for e in etapas_ordem:
+        d = por_fase.get(e, {})
+        if d.get('total', 0) > 0:
+            por_fase_array.append({
+                'etapa': etapa_abrev.get(e, e),
+                'exato':    d['exato'],
+                'vencedor': d['vencedor'],
+                'errou':    d['errou'],
+                'pts':      d['pts'],
+                'total':    d['total'],
+            })
+
+    # ── COLETIVO ───────────────────────────────────────────────────────────────
+
+    # Heatmap: últimos 20 jogos encerrados × todos usuários
+    jogos_hm = jogos[-20:]
+    hm_labels = [f"{j['time1']} x {j['time2']}" for j in jogos_hm]
+    hm_linhas = []
+    for u in usuarios:
+        celulas = []
+        for j in jogos_hm:
+            pal = mapa.get(u['id'], {}).get(j['jogo_id'])
+            if pal:
+                try:
+                    pts, tipo = _pts_tipo(j['gols_time1_real'], j['gols_time2_real'], pal[0], pal[1])
+                    celulas.append({'tipo': tipo, 'pts': pts,
+                                    'label': f"{pal[0]}x{pal[1]}", 'pts_label': f"+{pts}pt"})
+                except (ValueError, TypeError):
+                    celulas.append({'tipo': 'sem_palpite', 'pts': 0, 'label': '—', 'pts_label': ''})
+            else:
+                celulas.append({'tipo': 'sem_palpite', 'pts': 0, 'label': '—', 'pts_label': ''})
+        hm_linhas.append({'login': u['login'], 'uid': u['id'], 'celulas': celulas})
+
+    # Azarão: jogos onde > 50 % dos apostadores erraram
+    azarao = []
+    for j in jogos:
+        tot = err = 0
+        for u in usuarios:
+            pal = mapa.get(u['id'], {}).get(j['jogo_id'])
+            if pal:
+                try:
+                    _, tipo = _pts_tipo(j['gols_time1_real'], j['gols_time2_real'], pal[0], pal[1])
+                    tot += 1
+                    if tipo == 'errou':
+                        err += 1
+                except (ValueError, TypeError):
+                    pass
+        if tot > 0 and err / tot > 0.5:
+            azarao.append({
+                'label':     f"{j['time1']} x {j['time2']}",
+                'resultado': f"{j['gols_time1_real']} x {j['gols_time2_real']}",
+                'pct_erro':  round(err / tot * 100),
+                'erros': err, 'total': tot,
+            })
+    azarao.sort(key=lambda x: x['pct_erro'], reverse=True)
+
+    # Palpites mais comuns: últimos 10 jogos encerrados
+    palpites_comuns = []
+    for j in jogos[-10:]:
+        jid = j['jogo_id']
+        cont = {}
+        for u in usuarios:
+            pal = mapa.get(u['id'], {}).get(jid)
+            if pal:
+                key = f"{pal[0]}x{pal[1]}"
+                cont[key] = cont.get(key, 0) + 1
+        tot = sum(cont.values())
+        if not tot:
+            continue
+        resultado_real = f"{j['gols_time1_real']}x{j['gols_time2_real']}"
+        opcoes = sorted(
+            [{'placar': k, 'count': v, 'pct': round(v / tot * 100),
+              'acertou': k == resultado_real}
+             for k, v in cont.items()],
+            key=lambda x: x['count'], reverse=True
+        )
+        palpites_comuns.append({
+            'label':         f"{j['time1']} x {j['time2']}",
+            'resultado_real': resultado_real,
+            'opcoes':         opcoes[:5],
+            'total':          tot,
+        })
+
+    return jsonify({
+        'individual': {
+            'taxa_geral':  taxa,
+            'por_fase':    por_fase_array,
+            'streak':      {'count': streak_count, 'tipo': streak_tipo,
+                            'historico': historico_streak[-20:]},
+            'pts_por_jogo': pts_por_jogo,
+            'distribuicao': {str(k): v for k, v in sorted(dist_pontos.items())},
+        },
+        'coletivo': {
+            'heatmap':        {'jogos': hm_labels, 'linhas': hm_linhas},
+            'azarao':         azarao[:8],
+            'palpites_comuns': list(reversed(palpites_comuns)),  # mais recente primeiro
+        }
+    })
+
+
 # 🚪 ROTA: Logout
 @app.route('/logout')
 def logout():

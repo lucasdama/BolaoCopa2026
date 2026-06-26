@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard de Desempenho - Bolão</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f3f4f6;
+            color: #1f2937;
+            margin: 0;
+            padding: 16px;
+            padding-bottom: 40px;
+        }
+        h2  { font-weight: 800; color: #111827; letter-spacing: -.5px; margin: 20px 0 4px; }
+        h3  { font-weight: 700; color: #374151; font-size: 15px; margin: 0 0 14px; }
+
+        /* ── Menu ── */
+        .menu {
+            display: flex; flex-wrap: wrap;
+            background: white; padding: 6px;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0,0,0,.05);
+            margin-bottom: 20px; gap: 4px;
+        }
+        .menu a {
+            flex: 1; min-width: 54px;
+            text-align: center; padding: 9px 4px;
+            text-decoration: none; color: #4b5563;
+            font-weight: 700; font-size: 12px;
+            border-radius: 8px; transition: background .2s;
+            white-space: nowrap;
+        }
+        .menu a.active { background: #3aafa9; color: white; }
+
+        /* ── Layout cards ── */
+        .section-title {
+            font-size: 18px; font-weight: 800; color: #111827;
+            margin: 28px 0 14px; padding-bottom: 8px;
+            border-bottom: 2px solid #e5e7eb;
+            display: flex; align-items: center; gap: 8px;
+        }
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 14px; margin-bottom: 14px;
+        }
+        .grid-1 { margin-bottom: 14px; }
+        @media (max-width: 560px) { .grid-2 { grid-template-columns: 1fr; } }
+
+        .card {
+            background: white; border-radius: 12px;
+            box-shadow: 0 2px 6px rgba(0,0,0,.06);
+            padding: 18px;
+        }
+        .card-full { background: white; border-radius: 12px;
+            box-shadow: 0 2px 6px rgba(0,0,0,.06); padding: 18px; margin-bottom: 14px; }
+
+        /* ── Loading ── */
+        #loading {
+            text-align: center; padding: 60px 20px;
+            color: #6b7280; font-size: 15px;
+        }
+        .spinner {
+            width: 36px; height: 36px; border: 4px solid #e5e7eb;
+            border-top-color: #3aafa9; border-radius: 50%;
+            animation: spin .8s linear infinite; margin: 0 auto 16px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        #conteudo { display: none; }
+
+        /* ── Taxa de acerto ── */
+        .taxa-wrap {
+            display: flex; align-items: center; gap: 20px; flex-wrap: wrap;
+        }
+        .chart-donut-wrap {
+            position: relative; width: 140px; height: 140px; flex-shrink: 0;
+        }
+        .donut-center {
+            position: absolute; inset: 0;
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            pointer-events: none;
+        }
+        .donut-pts { font-size: 22px; font-weight: 800; color: #111827; line-height: 1; }
+        .donut-sub { font-size: 10px; color: #6b7280; margin-top: 2px; }
+        .taxa-legenda { flex: 1; min-width: 120px; }
+        .taxa-row {
+            display: flex; align-items: center; gap: 8px;
+            margin-bottom: 8px; font-size: 13px;
+        }
+        .taxa-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+        .taxa-label { flex: 1; color: #374151; font-weight: 600; }
+        .taxa-val   { font-weight: 800; color: #111827; }
+        .taxa-pct   { color: #6b7280; font-size: 11px; }
+
+        /* ── Streak ── */
+        .streak-numero {
+            font-size: 52px; font-weight: 900; line-height: 1;
+            margin-bottom: 4px;
+        }
+        .streak-tipo { font-size: 13px; font-weight: 700; margin-bottom: 16px; }
+        .streak-hist {
+            display: flex; flex-wrap: wrap; gap: 4px;
+        }
+        .sh-pill {
+            width: 22px; height: 22px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 10px; font-weight: 800; color: white;
+            flex-shrink: 0; cursor: default;
+        }
+        .sh-acerto  { background: #059669; }
+        .sh-erro    { background: #ef4444; }
+        .sh-sem     { background: #d1d5db; }
+        .streak-acerto { color: #059669; }
+        .streak-erro   { color: #ef4444; }
+
+        /* ── Gráficos ── */
+        .chart-wrap { position: relative; width: 100%; }
+        .chart-wrap.h220 { height: 220px; }
+        .chart-wrap.h200 { height: 200px; }
+        .chart-wrap.h180 { height: 180px; }
+
+        /* ── Por fase ── */
+        .fase-item { margin-bottom: 10px; }
+        .fase-header {
+            display: flex; justify-content: space-between;
+            font-size: 12px; font-weight: 600; color: #374151;
+            margin-bottom: 4px;
+        }
+        .fase-bar-wrap {
+            height: 14px; background: #f3f4f6; border-radius: 8px;
+            overflow: hidden; display: flex;
+        }
+        .fase-seg { height: 100%; transition: width .4s; }
+        .seg-exato    { background: #059669; }
+        .seg-vencedor { background: #d97706; }
+        .seg-errou    { background: #ef4444; }
+
+        /* ── Heatmap ── */
+        .heatmap-outer { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+        .heatmap-table {
+            border-collapse: collapse; font-size: 11px;
+            white-space: nowrap;
+        }
+        .heatmap-table th {
+            padding: 4px 6px; background: #f8fafc;
+            border-bottom: 2px solid #e5e7eb;
+            font-weight: 700; color: #374151; text-align: center;
+        }
+        .heatmap-table th.hm-user {
+            text-align: left; min-width: 80px; max-width: 100px;
+            position: sticky; left: 0; background: #f8fafc;
+            border-right: 2px solid #e5e7eb; z-index: 2;
+        }
+        .heatmap-table th.hm-jogo {
+            writing-mode: vertical-lr;
+            transform: rotate(180deg);
+            max-width: 28px; padding: 8px 4px;
+            font-size: 10px;
+        }
+        .heatmap-table td {
+            padding: 3px 4px; border: 1px solid #f3f4f6;
+            text-align: center; vertical-align: middle;
+        }
+        .heatmap-table td.hm-user {
+            text-align: left; font-weight: 700;
+            position: sticky; left: 0; background: white;
+            border-right: 2px solid #e5e7eb; z-index: 1;
+            padding: 4px 8px; color: #374151;
+        }
+        .hm-cell {
+            display: inline-block;
+            width: 26px; height: 26px; border-radius: 4px;
+            font-size: 9px; font-weight: 700; color: white;
+            display: flex; align-items: center; justify-content: center;
+            cursor: default; position: relative;
+        }
+        .hm-exato    { background: #059669; }
+        .hm-vencedor { background: #d97706; }
+        .hm-errou    { background: #ef4444; }
+        .hm-sem      { background: #e5e7eb; }
+        .hm-legenda  {
+            display: flex; gap: 12px; margin-bottom: 12px; flex-wrap: wrap;
+        }
+        .hm-leg-item { display: flex; align-items: center; gap: 5px; font-size: 12px; color: #374151; }
+        .hm-leg-box  {
+            width: 14px; height: 14px; border-radius: 3px; flex-shrink: 0;
+        }
+
+        /* ── Azarão ── */
+        .azarao-item {
+            display: flex; align-items: center; gap: 10px;
+            padding: 10px 0; border-bottom: 1px solid #f3f4f6;
+        }
+        .azarao-item:last-child { border-bottom: none; }
+        .azarao-times { flex: 1; font-weight: 700; font-size: 13px; color: #111827; }
+        .azarao-sub   { font-size: 11px; color: #6b7280; margin-top: 2px; font-weight: 400; }
+        .azarao-pct   {
+            font-size: 20px; font-weight: 900; color: #ef4444;
+            min-width: 56px; text-align: right;
+        }
+        .azarao-empty { color: #6b7280; font-size: 13px; text-align: center; padding: 20px; }
+
+        /* ── Palpites comuns ── */
+        .pc-card { margin-bottom: 16px; }
+        .pc-header {
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 10px;
+        }
+        .pc-jogo    { font-weight: 700; font-size: 13px; color: #111827; }
+        .pc-result  {
+            font-size: 11px; background: #dcfce7; color: #166534;
+            padding: 2px 8px; border-radius: 10px; font-weight: 700;
+        }
+        .pc-opcao { margin-bottom: 8px; }
+        .pc-row   {
+            display: flex; align-items: center; gap: 8px;
+            margin-bottom: 3px;
+        }
+        .pc-placar {
+            font-weight: 700; font-size: 12px; width: 44px;
+            flex-shrink: 0; color: #374151;
+        }
+        .pc-bar-bg  {
+            flex: 1; height: 10px; background: #f3f4f6;
+            border-radius: 6px; overflow: hidden;
+        }
+        .pc-bar-fill { height: 100%; border-radius: 6px; background: #3aafa9; transition: width .4s; }
+        .pc-bar-fill.pc-hit { background: #059669; }
+        .pc-pct {
+            font-size: 11px; color: #6b7280; min-width: 36px;
+            text-align: right; font-weight: 600;
+        }
+        .pc-divider { border: none; border-top: 1px solid #f3f4f6; margin: 14px 0; }
+    </style>
+</head>
+<body>
+
+<div class="menu">
+    <a href="/palpites">📝 Meus Palpites</a>
+    <a href="/ranking">🏆 Ranking</a>
+    <a href="/comparativo">📊 Comparativo</a>
+    <a href="/dashboard" class="active">🎯 Dashboard</a>
+    <a href="/alterar-senha">🔑 Mudar Senha</a>
+    <a href="/logout" style="color:#ff6b6b;">🚪 Sair</a>
+</div>
+
+<h2>🎯 Dashboard de Desempenho</h2>
+<p style="color:#4a5568;font-size:14px;margin-bottom:20px;">
+    Análise detalhada dos seus palpites e do grupo.
+</p>
+
+<div id="loading">
+    <div class="spinner"></div>
+    Carregando dados…
+</div>
+
+<div id="conteudo">
+
+    <!-- ════════════════════════ SEU DESEMPENHO ════════════════════════ -->
+    <div class="section-title">👤 Seu Desempenho</div>
+
+    <div class="grid-2">
+        <!-- Taxa de acerto -->
+        <div class="card">
+            <h3>Taxa de Acerto Geral</h3>
+            <div class="taxa-wrap">
+                <div class="chart-donut-wrap">
+                    <canvas id="chartDonut"></canvas>
+                    <div class="donut-center">
+                        <div class="donut-pts" id="donutPts">—</div>
+                        <div class="donut-sub">jogos</div>
+                    </div>
+                </div>
+                <div class="taxa-legenda" id="taxaLegenda"></div>
+            </div>
+        </div>
+
+        <!-- Streak -->
+        <div class="card">
+            <h3>Sequência Atual</h3>
+            <div id="streakNumero" class="streak-numero">—</div>
+            <div id="streakTipo" class="streak-tipo"></div>
+            <div id="streakHist" class="streak-hist"></div>
+        </div>
+    </div>
+
+    <!-- Desempenho por fase -->
+    <div class="card-full">
+        <h3>Desempenho por Fase</h3>
+        <div id="porFase"></div>
+    </div>
+
+    <!-- Pontuação vs média -->
+    <div class="card-full">
+        <h3>Sua Pontuação vs. Média do Grupo <span style="font-size:11px;font-weight:400;color:#6b7280;">(por jogo)</span></h3>
+        <div class="chart-wrap h220">
+            <canvas id="chartLinha"></canvas>
+        </div>
+    </div>
+
+    <!-- Distribuição -->
+    <div class="card-full">
+        <h3>Distribuição de Pontos por Jogo</h3>
+        <div class="chart-wrap h180">
+            <canvas id="chartDist"></canvas>
+        </div>
+    </div>
+
+    <!-- ════════════════════════ VISÃO DO GRUPO ════════════════════════ -->
+    <div class="section-title">👥 Visão do Grupo</div>
+
+    <!-- Heatmap -->
+    <div class="card-full">
+        <h3>Heatmap de Acertos <span style="font-size:11px;font-weight:400;color:#6b7280;">(últimos 20 jogos)</span></h3>
+        <div class="hm-legenda">
+            <div class="hm-leg-item"><div class="hm-leg-box" style="background:#059669"></div>Placar Exato (10pts)</div>
+            <div class="hm-leg-item"><div class="hm-leg-box" style="background:#d97706"></div>Acertou Vencedor</div>
+            <div class="hm-leg-item"><div class="hm-leg-box" style="background:#ef4444"></div>Errou</div>
+            <div class="hm-leg-item"><div class="hm-leg-box" style="background:#e5e7eb"></div>Sem palpite</div>
+        </div>
+        <div class="heatmap-outer">
+            <table class="heatmap-table" id="heatmapTable"></table>
+        </div>
+    </div>
+
+    <div class="grid-2">
+        <!-- Azarão -->
+        <div class="card">
+            <h3>🎰 Azarão do Grupo</h3>
+            <p style="font-size:12px;color:#6b7280;margin:-8px 0 12px;">Jogos onde a maioria errou o palpite.</p>
+            <div id="azaraoLista"></div>
+        </div>
+
+        <!-- Palpites mais comuns -->
+        <div class="card">
+            <h3>📌 Palpites Mais Comuns</h3>
+            <p style="font-size:12px;color:#6b7280;margin:-8px 0 12px;">Últimos 10 jogos encerrados.</p>
+            <div id="palpitesComuns"></div>
+        </div>
+    </div>
+
+</div><!-- #conteudo -->
+
+<script>
+const PALETTE = ['#2b7a78','#d97706','#3b82f6','#10b981','#ef4444',
+                 '#8b5cf6','#ec4899','#f59e0b','#6366f1','#14b8a6','#a855f7','#06b6d4'];
+
+fetch('/api/dashboard')
+    .then(r => r.json())
+    .then(data => {
+        if (data.erro) { document.getElementById('loading').textContent = 'Erro ao carregar.'; return; }
+        document.getElementById('loading').style.display  = 'none';
+        document.getElementById('conteudo').style.display = 'block';
+        renderIndividual(data.individual);
+        renderColetivo(data.coletivo);
+    })
+    .catch(() => { document.getElementById('loading').textContent = 'Erro ao carregar dados.'; });
+
+/* ══════════════════════ INDIVIDUAL ══════════════════════ */
+function renderIndividual(d) {
+    renderDonut(d.taxa_geral);
+    renderStreak(d.streak);
+    renderPorFase(d.por_fase);
+    renderLinha(d.pts_por_jogo);
+    renderDist(d.distribuicao);
+}
+
+function renderDonut(taxa) {
+    document.getElementById('donutPts').textContent = taxa.total_c_palpite;
+
+    const leg = document.getElementById('taxaLegenda');
+    const rows = [
+        { cor: '#059669', label: 'Placar Exato',    n: taxa.exato,    pct: taxa.pct_exato    },
+        { cor: '#d97706', label: 'Acertou Vencedor', n: taxa.vencedor, pct: taxa.pct_vencedor },
+        { cor: '#ef4444', label: 'Errou',            n: taxa.errou,    pct: taxa.pct_errou    },
+        { cor: '#d1d5db', label: 'Sem palpite',      n: taxa.sem_palpite, pct: null           },
+    ];
+    leg.innerHTML = rows.map(r => `
+        <div class="taxa-row">
+            <div class="taxa-dot" style="background:${r.cor}"></div>
+            <div class="taxa-label">${r.label}</div>
+            <div class="taxa-val">${r.n}</div>
+            ${r.pct !== null ? `<div class="taxa-pct">${r.pct}%</div>` : ''}
+        </div>`).join('');
+
+    new Chart(document.getElementById('chartDonut'), {
+        type: 'doughnut',
+        data: {
+            datasets: [{
+                data:            [taxa.exato, taxa.vencedor, taxa.errou, taxa.sem_palpite],
+                backgroundColor: ['#059669','#d97706','#ef4444','#e5e7eb'],
+                borderWidth: 2, borderColor: 'white',
+            }]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false, cutout: '68%',
+            plugins: { legend: { display: false }, tooltip: {
+                callbacks: { label: ctx => ` ${ctx.raw} jogos` }
+            }}
+        }
+    });
+}
+
+function renderStreak(streak) {
+    const num  = document.getElementById('streakNumero');
+    const tipo = document.getElementById('streakTipo');
+    const hist = document.getElementById('streakHist');
+
+    if (!streak.tipo) {
+        num.textContent  = '—';
+        tipo.textContent = 'Sem dados suficientes';
+    } else {
+        num.textContent = streak.count;
+        num.className   = 'streak-numero streak-' + streak.tipo;
+        const emoji     = streak.tipo === 'acerto' ? '🔥 Sequência de acertos!' : '💔 Sequência de erros';
+        tipo.textContent = emoji;
+        tipo.className   = 'streak-tipo streak-' + streak.tipo;
+    }
+
+    const labels = { acerto: '✓', erro: '✗', sem_palpite: '·' };
+    const classes = { acerto: 'sh-acerto', erro: 'sh-erro', sem_palpite: 'sh-sem' };
+    // historico é cronológico; exibimos do mais recente ao mais antigo
+    hist.innerHTML = [...streak.historico].reverse().map((r, i) =>
+        `<div class="sh-pill ${classes[r]}" title="${r}">${labels[r]}</div>`
+    ).join('');
+}
+
+function renderPorFase(fases) {
+    const wrap = document.getElementById('porFase');
+    if (!fases.length) {
+        wrap.innerHTML = '<p style="color:#6b7280;font-size:13px;">Nenhum dado disponível.</p>';
+        return;
+    }
+    wrap.innerHTML = fases.map(f => {
+        const pctEx = f.total ? (f.exato    / f.total * 100).toFixed(0) : 0;
+        const pctVn = f.total ? (f.vencedor / f.total * 100).toFixed(0) : 0;
+        const pctEr = f.total ? (f.errou    / f.total * 100).toFixed(0) : 0;
+        const media = f.total ? (f.pts / f.total).toFixed(1) : 0;
+        return `
+        <div class="fase-item">
+            <div class="fase-header">
+                <span>${f.etapa} <span style="color:#6b7280;font-weight:400;">(${f.total} jogo${f.total>1?'s':''})</span></span>
+                <span style="color:#2b7a78;font-weight:800;">${f.pts}pts  <span style="color:#9ca3af;font-weight:400;font-size:11px;">~${media}pt/jogo</span></span>
+            </div>
+            <div class="fase-bar-wrap">
+                <div class="fase-seg seg-exato"    style="width:${pctEx}%" title="Exato: ${f.exato}"></div>
+                <div class="fase-seg seg-vencedor" style="width:${pctVn}%" title="Vencedor: ${f.vencedor}"></div>
+                <div class="fase-seg seg-errou"    style="width:${pctEr}%" title="Erro: ${f.errou}"></div>
+            </div>
+            <div style="display:flex;gap:10px;margin-top:4px;font-size:10px;color:#6b7280;">
+                <span style="color:#059669;">■ ${pctEx}% exato</span>
+                <span style="color:#d97706;">■ ${pctVn}% vencedor</span>
+                <span style="color:#ef4444;">■ ${pctEr}% erro</span>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+function renderLinha(jogos) {
+    const JANELA = 20;
+    const slice  = jogos.slice(-JANELA);
+
+    const labels   = slice.map(j => j.label.replace(' x ', '\nx'));
+    const user_pts = slice.map(j => j.pts);
+    const medias   = slice.map(j => j.media);
+
+    // Cor do ponto: verde se >= média, vermelho se abaixo
+    const pontColors = slice.map(j =>
+        j.pts === null ? 'transparent' :
+        j.pts >= j.media ? '#059669' : '#ef4444'
+    );
+
+    new Chart(document.getElementById('chartLinha'), {
+        type: 'line',
+        data: {
+            labels,
+            datasets: [
+                {
+                    label: 'Você',
+                    data: user_pts,
+                    borderColor: '#2b7a78', borderWidth: 3,
+                    backgroundColor: 'transparent',
+                    pointBackgroundColor: pontColors,
+                    pointRadius: 5, pointHoverRadius: 7,
+                    tension: 0.2, spanGaps: true,
+                },
+                {
+                    label: 'Média do grupo',
+                    data: medias,
+                    borderColor: '#d97706', borderWidth: 2,
+                    backgroundColor: 'transparent',
+                    borderDash: [5, 4],
+                    pointRadius: 2, tension: 0.2,
+                }
+            ]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: {
+                legend: { position: 'top', labels: { boxWidth: 12, font: { size: 11 } } },
+                tooltip: { callbacks: {
+                    label: ctx => ` ${ctx.dataset.label}: ${ctx.raw ?? '—'} pts`
+                }}
+            },
+            scales: {
+                y: { beginAtZero: true, max: 11, grid: { color: '#f3f4f6' },
+                     ticks: { stepSize: 1 } },
+                x: { grid: { display: false }, ticks: { font: { size: 10 } } }
+            }
+        }
+    });
+}
+
+function renderDist(dist) {
+    const ordem = ['0','1','5','6','7','8','10'];
+    const labels = ordem.map(k => k + ' pts');
+    const vals   = ordem.map(k => dist[k] || 0);
+    const cores  = ['#ef4444','#f97316','#d97706','#eab308','#84cc16','#22c55e','#059669'];
+
+    new Chart(document.getElementById('chartDist'), {
+        type: 'bar',
+        data: {
+            labels,
+            datasets: [{
+                label: 'Jogos',
+                data: vals,
+                backgroundColor: cores,
+                borderRadius: 6,
+                borderSkipped: false,
+            }]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: { callbacks: {
+                    label: ctx => ` ${ctx.raw} jogo${ctx.raw !== 1 ? 's' : ''}`
+                }}
+            },
+            scales: {
+                y: { beginAtZero: true, ticks: { stepSize: 1 }, grid: { color: '#f3f4f6' } },
+                x: { grid: { display: false } }
+            }
+        }
+    });
+}
+
+/* ══════════════════════ COLETIVO ══════════════════════ */
+function renderColetivo(d) {
+    renderHeatmap(d.heatmap);
+    renderAzarao(d.azarao);
+    renderPalpitesComuns(d.palpites_comuns);
+}
+
+function renderHeatmap(hm) {
+    const table = document.getElementById('heatmapTable');
+    if (!hm.linhas.length || !hm.jogos.length) {
+        table.parentElement.innerHTML = '<p style="color:#6b7280;font-size:13px;padding:12px;">Dados insuficientes.</p>';
+        return;
+    }
+
+    // Header
+    let html = '<thead><tr><th class="hm-user">Jogador</th>';
+    hm.jogos.forEach(j => {
+        html += `<th class="hm-jogo" title="${j}">${j.replace(' x ', '×')}</th>`;
+    });
+    html += '</tr></thead><tbody>';
+
+    // Linhas
+    hm.linhas.forEach(linha => {
+        const eu = linha.uid === {{ session['usuario_id'] }};
+        html += `<tr><td class="hm-user" style="${eu ? 'color:#2b7a78' : ''}">${linha.login}${eu ? ' ★' : ''}</td>`;
+        linha.celulas.forEach(c => {
+            const cls = { exato: 'hm-exato', vencedor: 'hm-vencedor', errou: 'hm-errou', sem_palpite: 'hm-sem' }[c.tipo];
+            const title = c.tipo === 'sem_palpite' ? 'Sem palpite' : `${c.label} (${c.pts_label})`;
+            html += `<td><div class="hm-cell ${cls}" title="${title}">${c.pts > 0 ? c.pts : ''}</div></td>`;
+        });
+        html += '</tr>';
+    });
+    html += '</tbody>';
+    table.innerHTML = html;
+}
+
+function renderAzarao(lista) {
+    const el = document.getElementById('azaraoLista');
+    if (!lista.length) {
+        el.innerHTML = '<div class="azarao-empty">Nenhum jogo com maioria de erros ainda.</div>';
+        return;
+    }
+    el.innerHTML = lista.map((a, i) => `
+        <div class="azarao-item">
+            <div style="font-size:18px;min-width:28px;">${['🥇','🥈','🥉','4°','5°','6°','7°','8°'][i] || '—'}</div>
+            <div class="azarao-times">
+                ${a.label}
+                <div class="azarao-sub">Resultado: ${a.resultado} · ${a.erros}/${a.total} erraram</div>
+            </div>
+            <div class="azarao-pct">${a.pct_erro}%</div>
+        </div>`
+    ).join('');
+}
+
+function renderPalpitesComuns(lista) {
+    const el = document.getElementById('palpitesComuns');
+    if (!lista.length) {
+        el.innerHTML = '<p style="color:#6b7280;font-size:13px;">Dados insuficientes.</p>';
+        return;
+    }
+    el.innerHTML = lista.map((item, idx) => `
+        ${idx > 0 ? '<hr class="pc-divider">' : ''}
+        <div class="pc-card">
+            <div class="pc-header">
+                <div class="pc-jogo">${item.label}</div>
+                <div class="pc-result">✅ ${item.resultado_real.replace('x',' x ')}</div>
+            </div>
+            ${item.opcoes.map(op => `
+                <div class="pc-opcao">
+                    <div class="pc-row">
+                        <div class="pc-placar">${op.placar.replace('x',' x ')}</div>
+                        <div class="pc-bar-bg">
+                            <div class="pc-bar-fill ${op.acertou ? 'pc-hit' : ''}"
+                                 style="width:${op.pct}%"></div>
+                        </div>
+                        <div class="pc-pct">${op.pct}%</div>
+                    </div>
+                </div>`).join('')}
+            <div style="font-size:10px;color:#9ca3af;margin-top:4px;">${item.total} palpites</div>
+        </div>`
+    ).join('');
+}
+</script>
+</body>
+</html>
