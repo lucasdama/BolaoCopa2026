@@ -166,10 +166,7 @@ def inicializar_db():
         ''')
     # Migração: adiciona coluna 'ativo' caso ainda não exista
     try:
-        if os.environ.get('DATABASE_URL'):
-            cursor.execute("ALTER TABLE usuarios ADD COLUMN ativo INTEGER DEFAULT 1")
-        else:
-            cursor.execute("ALTER TABLE usuarios ADD COLUMN ativo INTEGER DEFAULT 1")
+        cursor.execute("ALTER TABLE usuarios ADD COLUMN ativo INTEGER DEFAULT 1")
     except Exception:
         pass  # coluna já existe
 
@@ -1013,6 +1010,9 @@ def logout():
     session.clear()
     return redirect(url_for('login'))
 
-if __name__ == '__main__':
+# Garante que a migração rode tanto no gunicorn (Render) quanto localmente
+with app.app_context():
     inicializar_db()
+
+if __name__ == '__main__':
     app.run(debug=True)
