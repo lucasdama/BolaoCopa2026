@@ -49,6 +49,53 @@ def preparar_query(query):
         query = re.sub(r'(?<!\w)\?(?!\w)', '%s', query)
     return query
 
+_ultimo_check_auto_inicio = datetime.min
+
+def auto_iniciar_partidas():
+    """Verifica partidas 'Pendente' cujo horário já passou e as marca como 'Em Andamento'."""
+    global _ultimo_check_auto_inicio
+    agora = datetime.now()
+
+    # Só verifica uma vez por minuto para não bater no banco a cada request
+    if (agora - _ultimo_check_auto_inicio).total_seconds() < 60:
+        return
+    _ultimo_check_auto_inicio = agora
+
+    try:
+        conn = obter_conexao_db()
+        cursor = obter_cursor(conn)
+        query = preparar_query("SELECT jogo_id, data_hora FROM jogos WHERE status = 'Pendente'")
+        cursor.execute(query)
+        partidas_pendentes = cursor.fetchall()
+
+        ids_para_iniciar = []
+        for p in partidas_pendentes:
+            data_str = str(p['data_hora']).strip()
+            horario_jogo = None
+            for fmt in ('%Y-%m-%d %H:%M:%S', '%Y-%m-%d %H:%M', '%d/%m/%Y %H:%M'):
+                try:
+                    horario_jogo = datetime.strptime(data_str, fmt)
+                    break
+                except ValueError:
+                    continue
+            if horario_jogo and agora >= horario_jogo:
+                ids_para_iniciar.append(p['jogo_id'])
+
+        if ids_para_iniciar:
+            for jid in ids_para_iniciar:
+                q = preparar_query("UPDATE jogos SET status = 'Em Andamento' WHERE jogo_id = ?")
+                cursor.execute(q, (jid,))
+                print(f"[AUTO] Partida {jid} iniciada automaticamente às {agora.strftime('%H:%M:%S')}")
+            conn.commit()
+
+        conn.close()
+    except Exception as e:
+        print(f"[AUTO] Erro ao verificar partidas automáticas: {e}")
+
+@app.before_request
+def verificar_partidas_antes_do_request():
+    auto_iniciar_partidas()
+
 def inicializar_db():
     conn = obter_conexao_db()
     cursor = obter_cursor(conn)

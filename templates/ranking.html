@@ -165,9 +165,12 @@
             
             <span onclick="fecharModalCompleto()" style="position: absolute; right: 20px; top: 15px; font-size: 28px; font-weight: bold; cursor: pointer; color: #6b7280; user-select: none;">&times;</span>
             
-            <h3 style="margin-top: 0; color: #1f2937; font-size: 18px;">📈 Trilha do CAMPEÃO</h3>
-            <p style="color: #6b7280; font-size: 13px; margin-top: -10px; margin-bottom: 20px;">Acompanhe o desempenho de todos os participantes rodada a rodada.</p>
-            
+            <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-bottom: 4px;">
+                <h3 style="margin: 0; color: #1f2937; font-size: 18px;">📈 Trilha do CAMPEÃO</h3>
+                <button id="btnToggleCompleto" onclick="toggleCompleto()" style="font-size: 12px; padding: 4px 12px; border: 1px solid #d1d5db; border-radius: 6px; background: #f9fafb; color: #374151; cursor: pointer;">Ver histórico completo</button>
+            </div>
+            <p style="color: #6b7280; font-size: 13px; margin-top: 4px; margin-bottom: 12px;">Acompanhe o desempenho de todos os participantes rodada a rodada.</p>
+
             <div style="flex-grow: 1; position: relative; min-height: 0;">
                 <canvas id="graficoCompletoCanvas"></canvas>
             </div>
@@ -176,7 +179,10 @@
     
     <!-- Gráfico Compacto (Top 3 + Logado) -->
     <div class="grafico-container">
-        <div class="grafico-titulo">Sua Evolução no Bolão (Pontos Acumulados)</div>
+        <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-bottom: 8px;">
+            <div class="grafico-titulo" style="margin-bottom: 0;">Sua Evolução no Bolão (Pontos Acumulados)</div>
+            <button id="btnToggleCompacto" onclick="toggleCompacto()" style="font-size: 12px; padding: 4px 12px; border: 1px solid #d1d5db; border-radius: 6px; background: #f9fafb; color: #374151; cursor: pointer;">Ver histórico completo</button>
+        </div>
         <div style="position: relative; width: 100%; height: 280px;">
             <canvas id="graficoEvolucao"></canvas>
         </div>
@@ -185,6 +191,67 @@
     <!-- 🧠 SCRIPTS DE INICIALIZAÇÃO E EVENTOS -->
     <script>
         // --- 1. LÓGICA DO GRÁFICO COMPACTO (Carrega automaticamente) ---
+        const JANELA_JOGOS = 20;
+        let dadosCompacto = null;
+        let chartCompactoInstancia = null;
+        let compactoModoCompleto = false;
+
+        function renderizarGraficoCompacto(modoCompleto) {
+            const canvas = document.getElementById('graficoEvolucao');
+            const ctx = canvas.getContext('2d');
+            const data = dadosCompacto;
+
+            const total = data.partidas.length;
+            const inicio = (!modoCompleto && total > JANELA_JOGOS) ? total - JANELA_JOGOS : 0;
+            const labels = data.partidas.slice(inicio);
+
+            const datasetsConfig = data.linhas.map(linha => {
+                const esLogado = linha.label.includes('(Você)');
+                return {
+                    label: linha.label,
+                    data: linha.dados.slice(inicio),
+                    borderColor: linha.cor,
+                    backgroundColor: 'transparent',
+                    borderWidth: esLogado ? 4 : 2,
+                    pointBackgroundColor: linha.cor,
+                    pointRadius: esLogado ? 5 : 3,
+                    tension: 0.15,
+                    fill: false
+                };
+            });
+
+            if (chartCompactoInstancia) chartCompactoInstancia.destroy();
+
+            chartCompactoInstancia = new Chart(ctx, {
+                type: 'line',
+                data: { labels, datasets: datasetsConfig },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top',
+                            labels: { boxWidth: 12, font: { size: 12, weight: 'bold' } }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: false,
+                            grid: { color: '#f3f4f6' },
+                            ticks: { font: { weight: 'bold' } }
+                        },
+                        x: { grid: { display: false } }
+                    }
+                }
+            });
+
+            const btn = document.getElementById('btnToggleCompacto');
+            if (btn) {
+                btn.textContent = modoCompleto ? `Últimos ${JANELA_JOGOS} jogos` : 'Ver histórico completo';
+            }
+        }
+
         fetch('/api/evolucao-pontos')
             .then(response => response.json())
             .then(data => {
@@ -201,114 +268,102 @@
                     return;
                 }
 
-                const datasetsConfig = data.linhas.map(linha => {
-                    const esLogado = linha.label.includes('(Você)');
-                    return {
-                        label: linha.label,
-                        data: linha.dados,
-                        borderColor: linha.cor,
-                        backgroundColor: 'transparent',
-                        borderWidth: esLogado ? 4 : 2, 
-                        pointBackgroundColor: linha.cor,
-                        pointRadius: esLogado ? 5 : 3, 
-                        tension: 0.15,
-                        fill: false
-                    };
-                });
+                dadosCompacto = data;
+                renderizarGraficoCompacto(false);
 
-                const ctx = canvas.getContext('2d');
-                new Chart(ctx, {
-                    type: 'line',
-                    data: {
-                        labels: data.partidas,
-                        datasets: datasetsConfig
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {
-                            legend: {
-                                display: true,
-                                position: 'top',
-                                labels: {
-                                    boxWidth: 12,
-                                    font: { size: 12, weight: 'bold' }
-                                }
-                            }
-                        },
-                        scales: {
-                            y: {
-                                beginAtZero: true,
-                                grid: { color: '#f3f4f6' },
-                                ticks: { font: { weight: 'bold' } }
-                            },
-                            x: { grid: { display: false } }
-                        }
-                    }
-                });
+                const btn = document.getElementById('btnToggleCompacto');
+                if (btn && data.partidas.length <= JANELA_JOGOS) {
+                    btn.style.display = 'none';
+                }
             })
             .catch(error => console.error('Erro ao buscar dados comparativos:', error));
+
+        function toggleCompacto() {
+            compactoModoCompleto = !compactoModoCompleto;
+            renderizarGraficoCompacto(compactoModoCompleto);
+        }
 
 
         // --- 2. LÓGICA DO MODAL DO GRÁFICO COMPLETO ---
         let chartCompletoInstancia = null;
+        let dadosCompleto = null;
+        let completoModoCompleto = false;
+
+        function renderizarGraficoCompleto(modoCompleto) {
+            const data = dadosCompleto;
+            const canvasCompleto = document.getElementById('graficoCompletoCanvas');
+            const ctxCompleto = canvasCompleto.getContext('2d');
+
+            const total = data.partidas.length;
+            const inicio = (!modoCompleto && total > JANELA_JOGOS) ? total - JANELA_JOGOS : 0;
+            const labels = data.partidas.slice(inicio);
+
+            const datasetsCompleto = data.linhas.map(linha => ({
+                label: linha.label,
+                data: linha.dados.slice(inicio),
+                borderColor: linha.cor,
+                backgroundColor: 'transparent',
+                borderWidth: 2,
+                pointBackgroundColor: linha.cor,
+                pointRadius: 2,
+                tension: 0.15,
+                fill: false
+            }));
+
+            if (chartCompletoInstancia) chartCompletoInstancia.destroy();
+
+            chartCompletoInstancia = new Chart(ctxCompleto, {
+                type: 'line',
+                data: { labels, datasets: datasetsCompleto },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'right',
+                            labels: { boxWidth: 10, font: { size: 11 } }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: false,
+                            grid: { color: '#f3f4f6' }
+                        },
+                        x: { grid: { display: false } }
+                    }
+                }
+            });
+
+            const btn = document.getElementById('btnToggleCompleto');
+            if (btn) {
+                btn.textContent = modoCompleto ? `Últimos ${JANELA_JOGOS} jogos` : 'Ver histórico completo';
+            }
+        }
+
+        function toggleCompleto() {
+            completoModoCompleto = !completoModoCompleto;
+            renderizarGraficoCompleto(completoModoCompleto);
+        }
 
         function abrirModalCompleto() {
             document.getElementById('modalGraficoCompleto').style.display = 'flex';
+            completoModoCompleto = false;
+
+            if (dadosCompleto) {
+                renderizarGraficoCompleto(false);
+                return;
+            }
 
             fetch('/api/evolucao-pontos-completo')
                 .then(response => response.json())
                 .then(data => {
                     if (data.erro) return;
+                    dadosCompleto = data;
 
-                    const canvasCompleto = document.getElementById('graficoCompletoCanvas');
-                    const ctxCompleto = canvasCompleto.getContext('2d');
+                    const btn = document.getElementById('btnToggleCompleto');
+                    if (btn && data.partidas.length <= JANELA_JOGOS) btn.style.display = 'none';
 
-                    if (chartCompletoInstancia) {
-                        chartCompletoInstancia.destroy();
-                    }
-
-                    const datasetsCompleto = data.linhas.map(linha => {
-                        return {
-                            label: linha.label,
-                            data: linha.dados,
-                            borderColor: linha.cor,
-                            backgroundColor: 'transparent',
-                            borderWidth: 2,
-                            pointBackgroundColor: linha.cor,
-                            pointRadius: 2,
-                            tension: 0.15,
-                            fill: false
-                        };
-                    });
-
-                    chartCompletoInstancia = new Chart(ctxCompleto, {
-                        type: 'line',
-                        data: {
-                            labels: data.partidas,
-                            datasets: datasetsCompleto
-                        },
-                        options: {
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            plugins: {
-                                legend: {
-                                    position: 'right',
-                                    labels: {
-                                        boxWidth: 10,
-                                        font: { size: 11 }
-                                    }
-                                }
-                            },
-                            scales: {
-                                y: {
-                                    beginAtZero: true,
-                                    grid: { color: '#f3f4f6' }
-                                },
-                                x: { grid: { display: false } }
-                            }
-                        }
-                    });
+                    renderizarGraficoCompleto(false);
                 })
                 .catch(error => console.error('Erro ao carregar o gráfico completo:', error));
         }
