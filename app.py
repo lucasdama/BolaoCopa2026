@@ -686,11 +686,21 @@ def comparativo():
     for u in usuarios:
         u['pontos_total'] = pontos_totais[u['id']]
 
+    # Totais por etapa: {etapa: {uid: pts}}
+    totais_etapa = {}
+    for etapa, lista in jogos_agrupados.items():
+        totais_etapa[etapa] = {u['id']: 0 for u in usuarios}
+        for jogo in lista:
+            for uid, p in jogo['palpites'].items():
+                if p and p['pontos']:
+                    totais_etapa[etapa][uid] += p['pontos']
+
     return render_template(
         'comparativo.html',
         usuarios=usuarios,
         jogos_agrupados=jogos_agrupados,
         etapas_ordem=etapas_ordem,
+        totais_etapa=totais_etapa,
         usuario_logado_id=session['usuario_id']
     )
 

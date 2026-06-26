@@ -217,16 +217,6 @@
     {% set lista = jogos_agrupados[etapa] %}
     {% if lista|length > 0 %}
 
-    {% set pts_etapa = namespace() %}
-    {% for u in usuarios %}{% set pts_etapa[u.id|string] = 0 %}{% endfor %}
-    {% for jogo in lista %}
-        {% for u in usuarios %}
-            {% set p = jogo['palpites'][u['id']] %}
-            {% if p and p['pontos'] %}
-                {% set pts_etapa[u.id|string] = pts_etapa[u.id|string] + p['pontos'] %}
-            {% endif %}
-        {% endfor %}
-    {% endfor %}
 
     <details open>
         <summary>
@@ -292,7 +282,7 @@
                         <td class="col-jogo">Total da etapa</td>
                         {% for u in usuarios %}
                         <td class="{{ 'col-eu' if u['id'] == usuario_logado_id }}">
-                            {{ pts_etapa[u.id|string] }} pts
+                            {{ totais_etapa[etapa][u['id']] }} pts
                         </td>
                         {% endfor %}
                     </tr>
