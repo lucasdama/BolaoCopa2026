@@ -5,16 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Comparativo de Palpites - Bolão</title>
     <style>
+        * { box-sizing: border-box; }
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background-color: #f3f4f6;
             color: #1f2937;
-            max-width: 100%;
             margin: 0;
             padding: 16px;
-            box-sizing: border-box;
         }
-
         h2 { font-weight: 800; color: #111827; letter-spacing: -0.5px; margin-top: 20px; }
 
         .menu {
@@ -26,26 +24,29 @@
             margin-bottom: 20px;
             gap: 4px;
             max-width: 700px;
+            flex-wrap: wrap;
         }
         .menu a {
             flex: 1;
+            min-width: 60px;
             text-align: center;
-            padding: 10px;
+            padding: 9px 6px;
             text-decoration: none;
             color: #4b5563;
             font-weight: 700;
-            font-size: 13px;
+            font-size: 12px;
             border-radius: 8px;
-            transition: all 0.2s ease;
+            transition: background 0.2s;
+            white-space: nowrap;
         }
         .menu a.active { background: #3aafa9; color: white; }
 
-        /* Sanfona por etapa */
+        /* Sanfona */
         details {
             background: white;
             border-radius: 12px;
             box-shadow: 0 2px 6px rgba(0,0,0,0.06);
-            margin-bottom: 14px;
+            margin-bottom: 12px;
             overflow: hidden;
         }
         summary {
@@ -66,17 +67,15 @@
         details[open] summary { background: #17252a; }
         .contador { background: #3aafa9; color: white; padding: 2px 10px; border-radius: 20px; font-size: 12px; }
 
-        /* Wrapper com scroll horizontal */
+        /* Tabela */
         .tabela-wrap {
             overflow-x: auto;
-            padding: 16px;
+            -webkit-overflow-scrolling: touch;
         }
-
-        /* Tabela comparativa */
         table {
             border-collapse: collapse;
-            min-width: 100%;
             font-size: 13px;
+            /* largura mínima: col-jogo + (n players × 80px) — ajustado via JS */
         }
         thead th {
             padding: 8px 12px;
@@ -86,17 +85,17 @@
             text-align: center;
             font-weight: 700;
             color: #374151;
+            min-width: 80px;
         }
         thead th.col-jogo {
             text-align: left;
-            min-width: 160px;
+            min-width: 150px;
             position: sticky;
             left: 0;
             background: #f8fafc;
             z-index: 2;
             border-right: 2px solid #e5e7eb;
         }
-        /* Destaque para o usuário logado */
         thead th.col-eu {
             background: #ecfdf5;
             color: #065f46;
@@ -104,13 +103,12 @@
         }
 
         tbody tr:hover { background: #f9fafb; }
-        tbody tr:last-child td { border-bottom: none; }
-
         td {
             padding: 10px 12px;
             border-bottom: 1px solid #f3f4f6;
             text-align: center;
             vertical-align: middle;
+            min-width: 80px;
         }
         td.col-jogo {
             text-align: left;
@@ -119,75 +117,86 @@
             background: white;
             z-index: 1;
             border-right: 2px solid #f3f4f6;
+            min-width: 150px;
         }
         tbody tr:hover td.col-jogo { background: #f9fafb; }
 
-        .jogo-times {
-            font-weight: 700;
-            font-size: 14px;
-            color: #111827;
-        }
-        .jogo-resultado {
-            font-size: 11px;
-            color: #6b7280;
-            margin-top: 2px;
-        }
+        .jogo-times { font-weight: 700; font-size: 13px; color: #111827; }
+        .jogo-resultado { font-size: 11px; color: #6b7280; margin-top: 2px; }
         .jogo-status {
-            display: inline-block;
-            font-size: 10px;
-            font-weight: 700;
-            padding: 1px 7px;
-            border-radius: 10px;
-            margin-top: 3px;
+            display: inline-block; font-size: 10px; font-weight: 700;
+            padding: 1px 7px; border-radius: 10px; margin-top: 3px;
         }
         .status-andamento { background: #fef9c3; color: #854d0e; }
         .status-encerrado { background: #dcfce7; color: #166534; }
 
-        /* Célula de palpite */
-        .palpite-placar {
-            font-weight: 700;
-            font-size: 15px;
-            line-height: 1.2;
-        }
-        .palpite-pts {
-            font-size: 11px;
-            font-weight: 600;
-            margin-top: 3px;
-        }
+        .palpite-placar { font-weight: 700; font-size: 14px; line-height: 1.2; }
+        .palpite-pts { font-size: 11px; font-weight: 600; margin-top: 3px; }
         .sem-palpite { color: #9ca3af; font-size: 13px; }
 
-        /* Cores por resultado */
-        .exato   { color: #059669; }
-        .exato .palpite-pts   { color: #059669; }
+        .exato    { color: #059669; }
         .vencedor { color: #d97706; }
-        .vencedor .palpite-pts { color: #d97706; }
-        .errou   { color: #dc2626; }
-        .errou .palpite-pts   { color: #dc2626; }
+        .errou    { color: #dc2626; }
         .andamento { color: #2563eb; }
 
-        /* Linha de totais no rodapé */
         tfoot td {
-            padding: 10px 12px;
-            font-weight: 800;
-            background: #f1f5f9;
-            border-top: 2px solid #e5e7eb;
-            text-align: center;
-            font-size: 14px;
-            color: #1e293b;
+            padding: 10px 12px; font-weight: 800;
+            background: #f1f5f9; border-top: 2px solid #e5e7eb;
+            text-align: center; font-size: 13px; color: #1e293b;
         }
         tfoot td.col-jogo {
-            text-align: left;
-            position: sticky;
-            left: 0;
-            background: #f1f5f9;
-            border-right: 2px solid #e5e7eb;
+            text-align: left; position: sticky; left: 0;
+            background: #f1f5f9; border-right: 2px solid #e5e7eb;
         }
         tfoot td.col-eu { color: #059669; }
 
-        .vazio { padding: 20px; text-align: center; color: #9ca3af; font-size: 14px; }
+        /* ── Barra sticky de nomes ── */
+        #sticky-bar {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0;
+            z-index: 999;
+            background: #17252a;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        #sticky-bar-inner {
+            display: flex;
+            align-items: stretch;
+            /* translateX aplicado via JS para sincronizar com scroll horizontal */
+            will-change: transform;
+        }
+        #sticky-bar .sb-col {
+            flex-shrink: 0;
+            padding: 8px 12px;
+            font-size: 11px;
+            font-weight: 700;
+            color: #e5e7eb;
+            text-align: center;
+            white-space: nowrap;
+            border-right: 1px solid rgba(255,255,255,0.1);
+        }
+        #sticky-bar .sb-col.sb-jogo {
+            text-align: left;
+            color: #9ca3af;
+            position: sticky;
+            left: 0;
+            background: #17252a;
+            z-index: 2;
+            border-right: 2px solid rgba(255,255,255,0.2);
+        }
+        #sticky-bar .sb-col.sb-eu {
+            color: #6ee7b7;
+            background: rgba(16,185,129,0.15);
+        }
     </style>
 </head>
 <body>
+
+    <!-- Barra de nomes sticky (gerenciada por JS) -->
+    <div id="sticky-bar">
+        <div id="sticky-bar-inner"></div>
+    </div>
 
     <div class="menu">
         <a href="/palpites">📝 Meus Palpites</a>
@@ -200,6 +209,7 @@
     <h2>📊 Comparativo de Palpites</h2>
     <p style="color: #4a5568; margin-bottom: 20px; font-size: 14px;">
         Palpites de todos os participantes nos jogos encerrados e em andamento.
+        Abra uma etapa para ver.
     </p>
 
     {% set tem_jogos = namespace(value=false) %}
@@ -217,8 +227,7 @@
     {% set lista = jogos_agrupados[etapa] %}
     {% if lista|length > 0 %}
 
-
-    <details open>
+    <details>
         <summary>
             <span>📁 {{ etapa }}</span>
             <span class="contador">{{ lista|length }} jogo{{ 's' if lista|length != 1 }}</span>
@@ -229,9 +238,9 @@
                     <tr>
                         <th class="col-jogo">Jogo</th>
                         {% for u in usuarios %}
-                        <th class="{{ 'col-eu' if u['id'] == usuario_logado_id }}">
-                            {{ u['login'] }}
-                            {% if u['id'] == usuario_logado_id %}<br><span style="font-weight:400;font-size:11px;">(Você)</span>{% endif %}
+                        <th class="{{ 'col-eu' if u['id'] == usuario_logado_id }}"
+                            data-uid="{{ u['id'] }}">
+                            {{ u['login'] }}{% if u['id'] == usuario_logado_id %} ★{% endif %}
                         </th>
                         {% endfor %}
                     </tr>
@@ -242,9 +251,7 @@
                     <td class="col-jogo">
                         <div class="jogo-times">{{ jogo['time1'] }} x {{ jogo['time2'] }}</div>
                         {% if jogo['status'] == 'Encerrado' and jogo['gols_time1_real'] is not none %}
-                        <div class="jogo-resultado">
-                            Resultado: {{ jogo['gols_time1_real'] }} x {{ jogo['gols_time2_real'] }}
-                        </div>
+                        <div class="jogo-resultado">{{ jogo['gols_time1_real'] }} x {{ jogo['gols_time2_real'] }}</div>
                         {% endif %}
                         <span class="jogo-status {{ 'status-andamento' if jogo['status'] == 'Em Andamento' else 'status-encerrado' }}">
                             {{ '🟡 Em Andamento' if jogo['status'] == 'Em Andamento' else '✅ Encerrado' }}
@@ -255,19 +262,16 @@
                     <td>
                         {% if p %}
                             {% if jogo['status'] == 'Em Andamento' %}
-                            <div class="palpite-placar andamento">{{ p['g1'] }} x {{ p['g2'] }}</div>
+                                <div class="palpite-placar andamento">{{ p['g1'] }} x {{ p['g2'] }}</div>
                             {% elif p['acerto'] %}
-                            <div class="palpite-placar {{ p['acerto'] }}">
-                                {{ p['g1'] }} x {{ p['g2'] }}
-                                <div class="palpite-pts">
-                                    {% if p['pontos'] == 10 %}⭐ 10 pts
-                                    {% elif p['pontos'] >= 5 %}{{ p['pontos'] }} pts
-                                    {% else %}{{ p['pontos'] if p['pontos'] else 0 }} pts
-                                    {% endif %}
+                                <div class="palpite-placar {{ p['acerto'] }}">
+                                    {{ p['g1'] }} x {{ p['g2'] }}
+                                    <div class="palpite-pts">
+                                        {% if p['pontos'] == 10 %}⭐ 10{% else %}{{ p['pontos'] if p['pontos'] else 0 }}{% endif %} pts
+                                    </div>
                                 </div>
-                            </div>
                             {% else %}
-                            <div class="palpite-placar">{{ p['g1'] }} x {{ p['g2'] }}</div>
+                                <div class="palpite-placar">{{ p['g1'] }} x {{ p['g2'] }}</div>
                             {% endif %}
                         {% else %}
                             <span class="sem-palpite">—</span>
@@ -294,5 +298,95 @@
     {% endif %}
     {% endfor %}
 
+<script>
+(function () {
+    const stickyBar    = document.getElementById('sticky-bar');
+    const stickyInner  = document.getElementById('sticky-bar-inner');
+    const usuarioLogadoId = {{ usuario_logado_id }};
+
+    let activeWrap  = null;   // .tabela-wrap atualmente aberto e visível
+    let activeThead = null;
+    let colWidths   = [];     // larguras das colunas da tabela ativa
+
+    // ── Constrói as células da barra a partir do thead ativo ──
+    function buildBar(thead) {
+        stickyInner.innerHTML = '';
+        const ths = thead.querySelectorAll('th');
+        colWidths = [];
+        ths.forEach(th => {
+            const w = th.getBoundingClientRect().width;
+            colWidths.push(w);
+            const cell = document.createElement('div');
+            cell.className = 'sb-col' +
+                (th.classList.contains('col-jogo') ? ' sb-jogo' : '') +
+                (th.classList.contains('col-eu')   ? ' sb-eu'   : '');
+            cell.style.width    = w + 'px';
+            cell.style.minWidth = w + 'px';
+            cell.textContent    = th.textContent.trim();
+            stickyInner.appendChild(cell);
+        });
+    }
+
+    // ── Mostra/esconde e sincroniza a barra ──
+    function onScroll() {
+        if (!activeThead || !activeWrap) { stickyBar.style.display = 'none'; return; }
+
+        const theadBottom = activeThead.getBoundingClientRect().bottom;
+        const wrapBottom  = activeWrap.getBoundingClientRect().bottom;
+
+        if (theadBottom < 0 && wrapBottom > 40) {
+            stickyBar.style.display = 'block';
+            // desloca a inner para simular o scroll horizontal da tabela
+            stickyInner.style.transform = `translateX(-${activeWrap.scrollLeft}px)`;
+        } else {
+            stickyBar.style.display = 'none';
+        }
+    }
+
+    function onTableScroll() {
+        if (stickyBar.style.display === 'block') {
+            stickyInner.style.transform = `translateX(-${activeWrap.scrollLeft}px)`;
+        }
+    }
+
+    // ── Observa abertura/fechamento de cada details ──
+    document.querySelectorAll('details').forEach(det => {
+        det.addEventListener('toggle', () => {
+            if (det.open) {
+                // Fecha os demais (comportamento acordeão)
+                document.querySelectorAll('details').forEach(d => {
+                    if (d !== det) d.removeAttribute('open');
+                });
+
+                const wrap  = det.querySelector('.tabela-wrap');
+                const thead = det.querySelector('thead');
+                if (!wrap || !thead) return;
+
+                activeWrap  = wrap;
+                activeThead = thead;
+
+                // Reconstrói a barra com as larguras reais das colunas
+                // (espera o layout terminar de renderizar)
+                requestAnimationFrame(() => {
+                    buildBar(thead);
+                    onScroll();
+                });
+
+                wrap.addEventListener('scroll', onTableScroll);
+            } else {
+                // Fechou — limpa se era o ativo
+                const wrap = det.querySelector('.tabela-wrap');
+                if (wrap === activeWrap) {
+                    activeWrap  = null;
+                    activeThead = null;
+                    stickyBar.style.display = 'none';
+                }
+            }
+        });
+    });
+
+    window.addEventListener('scroll', onScroll, { passive: true });
+})();
+</script>
 </body>
 </html>
