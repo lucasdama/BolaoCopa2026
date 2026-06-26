@@ -594,116 +594,105 @@ def admin_usuarios():
 
 #ROTA: Visualizar Palpites de um Amigo (Ajustada para o seu HTML original)
 
-@app.route('/palpites_amigo/<amigo_id>')
-def palpites_amigo(amigo_id):
+# 📊 ROTA: Comparativo de Palpites (Tabela cruzada jogos × jogadores)
+@app.route('/comparativo')
+def comparativo():
     if 'usuario_id' not in session:
         return redirect(url_for('login'))
-        
+
     conn = obter_conexao_db()
     cursor = obter_cursor(conn)
-    
-    try:
-        amigo_id_int = int(amigo_id)
-    except ValueError:
-        amigo_id_int = amigo_id
 
-    query_amigo = preparar_query('SELECT login FROM usuarios WHERE id = ?')
-    cursor.execute(query_amigo, (amigo_id_int,))
-    amigo = cursor.fetchone()
-    
-    if not amigo:
-        conn.close()
-        return "Usuário não encontrado", 404
-        
-    cursor.execute('SELECT * FROM jogos ORDER BY data_hora ASC')
-    jogos = cursor.fetchall()
-    
-    query_palpites = preparar_query('SELECT * FROM palpites WHERE usuario_id = ?')
-    cursor.execute(query_palpites, (amigo_id_int,))
-    palpites_busca = cursor.fetchall()
+    cursor.execute("SELECT id, login FROM usuarios ORDER BY login ASC")
+    usuarios = [dict(u) for u in cursor.fetchall()]
+
+    query_jogos = preparar_query(
+        "SELECT * FROM jogos WHERE status != 'Pendente' ORDER BY data_hora ASC"
+    )
+    cursor.execute(query_jogos)
+    jogos_raw = cursor.fetchall()
+
+    cursor.execute("SELECT * FROM palpites")
+    todos_palpites = cursor.fetchall()
     conn.close()
-    
-    meus_palpites = {}
-    try:
-        meus_palpites = {p['jogo_id']: (p['gols_time1'], p['gols_time2']) for p in palpites_busca}
-    except Exception:
-        pass
-    
+
+    # {usuario_id: {jogo_id: (g1, g2)}}
+    mapa_palpites = {}
+    for p in todos_palpites:
+        uid = p['usuario_id']
+        jid = p['jogo_id']
+        if uid not in mapa_palpites:
+            mapa_palpites[uid] = {}
+        mapa_palpites[uid][jid] = (p['gols_time1'], p['gols_time2'])
+
+    def _pts(g1r, g2r, g1p, g2p):
+        if g1r == g1p and g2r == g2p:
+            return 10
+        pts = 0
+        vr = "t1" if g1r > g2r else "t2" if g2r > g1r else "e"
+        vp = "t1" if g1p > g2p else "t2" if g2p > g1p else "e"
+        if vr == vp:
+            pts += 5
+            if (g1r - g2r) == (g1p - g2p):
+                pts += 2
+        if g1r == g1p or g2r == g2p:
+            pts += 1
+        return pts
+
+    pontos_totais = {u['id']: 0 for u in usuarios}
+
     etapas_ordem = [
         "Fase de Grupos Rodada 1", "Fase de Grupos Rodada 2", "Fase de Grupos Rodada 3",
-        "Dezesseis-avos de final", "Oitavas de final", "Quartas de final", 
+        "Dezesseis-avos de final", "Oitavas de final", "Quartas de final",
         "Semifinais", "Disputa de terceiro lugar", "Final"
     ]
-    
-    jogos_agrupados = {etapa: [] for etapa in etapas_ordem}
-    agora = datetime.now()
+    jogos_agrupados = {e: [] for e in etapas_ordem}
 
-    for row in jogos:
+    for row in jogos_raw:
         jogo = dict(row)
-        j_id = jogo['jogo_id']
-        etapa_jogo = jogo['etapa']
-        
-        jogo['acertou_placar'] = False
-        jogo['acertou_vencedor'] = False
-        jogo['bonus_saldo'] = False
-        jogo['bonus_gols'] = False
-        jogo['pontos_faturados'] = 0
-        
-        palpite = meus_palpites.get(j_id)
-        jogo['gols_time1_palpite'] = palpite[0] if palpite else None
-        jogo['gols_time2_palpite'] = palpite[1] if palpite else None
-        
-        horario_jogo = None
-        if jogo.get('data_hora'):
-            data_str = str(jogo['data_hora']).strip()
-            for formato in ('%Y-%m-%d %H:%M:%S', '%Y-%m-%d %H:%M', '%d/%m/%Y %H:%M'):
+        jid = jogo['jogo_id']
+        encerrado = jogo['status'] == 'Encerrado' and jogo.get('gols_time1_real') is not None
+
+        palpites_jogo = {}
+        for u in usuarios:
+            uid = u['id']
+            palpite = mapa_palpites.get(uid, {}).get(jid)
+            if palpite is None:
+                palpites_jogo[uid] = None
+                continue
+            g1p, g2p = palpite
+            pontos = None
+            acerto = None
+            if encerrado:
                 try:
-                    horario_jogo = datetime.strptime(data_str, formato)
-                    break
-                except ValueError:
-                    continue
-                
-        jogo_trancado = False
-        if str(jogo.get('status', '')).strip() != 'Pendente':
-            jogo_trancado = True
-        elif horario_jogo and agora >= (horario_jogo - timedelta(hours=1)):
-            jogo_trancado = True
+                    pontos = _pts(
+                        int(jogo['gols_time1_real']), int(jogo['gols_time2_real']),
+                        int(g1p), int(g2p)
+                    )
+                    acerto = 'exato' if pontos == 10 else ('vencedor' if pontos >= 5 else 'errou')
+                    pontos_totais[uid] += pontos
+                except (ValueError, TypeError):
+                    pass
+            palpites_jogo[uid] = {'g1': g1p, 'g2': g2p, 'pontos': pontos, 'acerto': acerto}
 
-        if not jogo_trancado:
-            continue
+        jogo['palpites'] = palpites_jogo
+        etapa = jogo['etapa']
+        if etapa not in jogos_agrupados:
+            jogos_agrupados[etapa] = []
+        jogos_agrupados[etapa].append(jogo)
 
-        if jogo['status'] == 'Encerrado' and jogo['gols_time1_real'] is not None and jogo['gols_time1_palpite'] is not None and jogo['gols_time1_palpite'] != '':
-            try:
-                g1_real = int(jogo['gols_time1_real'])
-                g2_real = int(jogo['gols_time2_real'])
-                g1_palp = int(jogo['gols_time1_palpite'])
-                g2_palp = int(jogo['gols_time2_palpite'])
-                
-                if g1_real == g1_palp and g2_real == g2_palp:
-                    jogo['acertou_placar'] = True
-                    jogo['pontos_faturados'] = 10
-                else:
-                    venc_real = "t1" if g1_real > g2_real else "t2" if g2_real > g1_real else "empate"
-                    venc_palp = "t1" if g1_palp > g2_palp else "t2" if g2_palp > g1_palp else "empate"
-                    
-                    if venc_real == venc_palp:
-                        jogo['acertou_vencedor'] = True
-                        jogo['pontos_faturados'] += 5
-                        if (g1_real - g2_real) == (g1_palp - g2_palp):
-                            jogo['bonus_saldo'] = True
-                            jogo['pontos_faturados'] += 2
-                            
-                    if g1_real == g1_palp or g2_real == g2_palp:
-                        jogo['bonus_gols'] = True
-                        jogo['pontos_faturados'] += 1
-            except (ValueError, TypeError):
-                pass
+    # Ordena usuários por pontuação total (ranking)
+    usuarios.sort(key=lambda u: pontos_totais[u['id']], reverse=True)
+    for u in usuarios:
+        u['pontos_total'] = pontos_totais[u['id']]
 
-        if etapa_jogo not in jogos_agrupados:
-            jogos_agrupados[etapa_jogo] = []
-        jogos_agrupados[etapa_jogo].append(jogo)
-
-    return render_template('palpites_amigo.html', nome_amigo=amigo['login'], jogos_agrupados=jogos_agrupados)
+    return render_template(
+        'comparativo.html',
+        usuarios=usuarios,
+        jogos_agrupados=jogos_agrupados,
+        etapas_ordem=etapas_ordem,
+        usuario_logado_id=session['usuario_id']
+    )
 
 # 🔑 ROTA: Alterar Senha
 @app.route('/alterar-senha', methods=['GET', 'POST'])

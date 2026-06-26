@@ -147,6 +147,7 @@
     <div class="menu">
         <a href="/palpites">📝 Meus Palpites</a>
         <a href="/ranking" class="active">🏆 Ranking</a>
+        <a href="/comparativo">📊 Comparativo</a>
         <a href="/alterar-senha">🔑 Mudar Senha</a>
         <a href="/logout" style="color: #ff6b6b;">🚪 Sair</a>
     </div>
@@ -393,9 +394,7 @@
                 {% if session['usuario_id'] == usuario['id'] %}
                     <span class="nome-usuario" style="color: #111827;">{{ usuario['login'] }} (Você)</span>
                 {% else %}
-                    <a href="/palpites_amigo/{{ usuario['id'] }}" class="nome-usuario" title="Clique para espiar os palpites de {{ usuario['login'] }}">
-                        🔎 {{ usuario['login'] }}
-                    </a>
+                    <span class="nome-usuario">{{ usuario['login'] }}</span>
                 {% endif %}
             </div>
             
