@@ -7,9 +7,9 @@ def atualizar_chaveamento_completo(cursor, is_postgres=False):
     """
     
     # 🔍 1. BUSCA JOGOS (Incluídas as colunas de flag_code para o mapa de bandeiras)
-    cursor.execute("SELECT jogo_id, time1, time2, gols_time1_real, gols_time2_real, etapa, status, flag_code_time1, flag_code_time2 FROM jogos")
+    cursor.execute("SELECT jogo_id, time1, time2, gols_time1_real, gols_time2_real, etapa, status, flag_code_time1, flag_code_time2, vencedor_penaltis FROM jogos")
     jogos_cruus = cursor.fetchall()
-    
+
     jogos = []
     for j in jogos_cruus:
         if isinstance(j, dict):
@@ -19,7 +19,8 @@ def atualizar_chaveamento_completo(cursor, is_postgres=False):
                 'jogo_id': j[0], 'time1': j[1], 'time2': j[2],
                 'gols_time1_real': j[3], 'gols_time2_real': j[4],
                 'etapa': j[5], 'status': j[6],
-                'flag_code_time1': j[7], 'flag_code_time2': j[8] 
+                'flag_code_time1': j[7], 'flag_code_time2': j[8],
+                'vencedor_penaltis': j[9]
             })
 
     # 🗺️ 2. MAPEAMENTO FIXO DO RANKING FIFA (Para critérios de desempate)
@@ -250,15 +251,23 @@ def atualizar_chaveamento_completo(cursor, is_postgres=False):
         match = next((item for item in jogos if item['jogo_id'] == id_partida), None)
         if not match or match['status'] != 'Encerrado':
             return f"Vencedor {id_partida.split('_')[1]}" if buscar_vencedor else f"Perdedor {id_partida.split('_')[1]}"
-        
+
         g1 = int(match['gols_time1_real'] or 0)
         g2 = int(match['gols_time2_real'] or 0)
-        
+
         if g1 > g2:
             return match['time1'] if buscar_vencedor else match['time2']
         elif g2 > g1:
             return match['time2'] if buscar_vencedor else match['time1']
-        return match['time1'] if buscar_vencedor else match['time2']
+
+        # Empate no placar normal: usar vencedor definido nos pênaltis
+        vp = match.get('vencedor_penaltis')
+        if buscar_vencedor:
+            return vp if vp else match['time1']
+        else:
+            if vp:
+                return match['time2'] if vp == match['time1'] else match['time1']
+            return match['time2']
 
     estrutura_fluxo = {
         'Jogo_89': ('Jogo_74', 'Jogo_77'), 'Jogo_90': ('Jogo_73', 'Jogo_75'),

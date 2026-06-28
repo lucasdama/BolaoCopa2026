@@ -170,6 +170,12 @@ def inicializar_db():
     except Exception:
         pass  # coluna já existe
 
+    # Migração: adiciona coluna 'vencedor_penaltis' para desempate em fases eliminatórias
+    try:
+        cursor.execute("ALTER TABLE jogos ADD COLUMN vencedor_penaltis TEXT")
+    except Exception:
+        pass  # coluna já existe
+
     conn.commit()
     conn.close()
 
@@ -441,47 +447,70 @@ def admin():
         elif acao == 'encerrar':
             gols_t1 = request.form.get('gols_time1_real')
             gols_t2 = request.form.get('gols_time2_real')
-            
-            print(f"⚽ Placar digitado: {gols_t1} X {gols_t2}")
-            
-            if gols_t1 is not None and gols_t2 is not None and gols_t1.strip() != '' and gols_t2.strip() != '':
-                query_end = preparar_query('''
-                    UPDATE jogos 
-                    SET gols_time1_real = ?, gols_time2_real = ?, status = 'Encerrado' 
-                    WHERE jogo_id = ?
-                ''')
-                cursor.execute(query_end, (int(gols_t1), int(gols_t2), jogo_id))
-                conn.commit()
-                is_pg = eh_postgres(conn)
-                print(f"✅ Jogo {jogo_id} ENCERRADO no banco {'Render/PostgreSQL' if is_pg else 'local/SQLite'}.")
-                flash('Resultado gravado e jogo encerrado com sucesso!')
+            vencedor_penaltis = request.form.get('vencedor_penaltis', '').strip() or None
 
-                # 🛠️ O DETETIVE ENTRA EXATAMENTE AQUI:
-                try:
-                    print("\n🔍 [DIAGNÓSTICO] Quais tabelas existem nesta conexão?")
-                    if is_pg:
-                        cursor.execute("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' ORDER BY table_name")
-                    else:
-                        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
-                    tabelas = cursor.fetchall()
-                    
-                    # Tenta ler formato dicionário ou tupla pura do SQLite
-                    nomes_tabelas = []
-                    for t in tabelas:
-                        if isinstance(t, dict): nomes_tabelas.append(t['name'])
-                        elif hasattr(t, 'keys') and 'name' in t.keys(): nomes_tabelas.append(t['name'])
-                        elif hasattr(t, 'keys') and 'table_name' in t.keys(): nomes_tabelas.append(t['table_name'])
-                        else: nomes_tabelas.append(t[0])
-                        
-                    print(f"📋 Tabelas encontradas no banco: {nomes_tabelas}")
-                    
-                    print("🏆 Disparando recálculo automático da árvore de mata-mata...")
-                    atualizar_chaveamento_completo(cursor, is_postgres=is_pg)
+            print(f"⚽ Placar digitado: {gols_t1} X {gols_t2} | Pênaltis: {vencedor_penaltis}")
+
+            FASES_ELIMINATORIAS = {
+                'Dezesseis-avos de final', 'Oitavas de final',
+                'Quartas de final', 'Semifinais', 'Final'
+            }
+
+            if gols_t1 is not None and gols_t2 is not None and gols_t1.strip() != '' and gols_t2.strip() != '':
+                # Busca etapa e times do jogo para validar pênaltis
+                q_jogo = preparar_query("SELECT etapa, time1, time2 FROM jogos WHERE jogo_id = ?")
+                cursor.execute(q_jogo, (jogo_id,))
+                row = cursor.fetchone()
+                etapa_jogo = (row['etapa'] if isinstance(row, dict) else row[0]) if row else ''
+                time1_jogo = (row['time1'] if isinstance(row, dict) else row[1]) if row else ''
+                time2_jogo = (row['time2'] if isinstance(row, dict) else row[2]) if row else ''
+
+                eh_eliminatorio = etapa_jogo in FASES_ELIMINATORIAS
+                eh_empate = int(gols_t1) == int(gols_t2)
+
+                if eh_eliminatorio and eh_empate and not vencedor_penaltis:
+                    flash('Erro: Jogo eliminatório empatado precisa de um vencedor nos pênaltis!')
+                elif eh_eliminatorio and eh_empate and vencedor_penaltis not in (time1_jogo, time2_jogo):
+                    flash(f'Erro: Vencedor nos pênaltis deve ser {time1_jogo} ou {time2_jogo}!')
+                else:
+                    vp_salvar = vencedor_penaltis if (eh_eliminatorio and eh_empate) else None
+                    query_end = preparar_query('''
+                        UPDATE jogos
+                        SET gols_time1_real = ?, gols_time2_real = ?, vencedor_penaltis = ?, status = 'Encerrado'
+                        WHERE jogo_id = ?
+                    ''')
+                    cursor.execute(query_end, (int(gols_t1), int(gols_t2), vp_salvar, jogo_id))
                     conn.commit()
-                    print("✅ Árvore de mata-mata atualizada com sucesso no lote atual!")
-                except Exception as e:
-                    conn.rollback()
-                    print(f"❌ Erro crítico ao atualizar o chaveamento: {e}")
+                    is_pg = eh_postgres(conn)
+                    print(f"✅ Jogo {jogo_id} ENCERRADO no banco {'Render/PostgreSQL' if is_pg else 'local/SQLite'}.")
+                    flash('Resultado gravado e jogo encerrado com sucesso!')
+
+                    # 🛠️ O DETETIVE ENTRA EXATAMENTE AQUI:
+                    try:
+                        print("\n🔍 [DIAGNÓSTICO] Quais tabelas existem nesta conexão?")
+                        if is_pg:
+                            cursor.execute("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' ORDER BY table_name")
+                        else:
+                            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
+                        tabelas = cursor.fetchall()
+
+                        # Tenta ler formato dicionário ou tupla pura do SQLite
+                        nomes_tabelas = []
+                        for t in tabelas:
+                            if isinstance(t, dict): nomes_tabelas.append(t['name'])
+                            elif hasattr(t, 'keys') and 'name' in t.keys(): nomes_tabelas.append(t['name'])
+                            elif hasattr(t, 'keys') and 'table_name' in t.keys(): nomes_tabelas.append(t['table_name'])
+                            else: nomes_tabelas.append(t[0])
+
+                        print(f"📋 Tabelas encontradas no banco: {nomes_tabelas}")
+
+                        print("🏆 Disparando recálculo automático da árvore de mata-mata...")
+                        atualizar_chaveamento_completo(cursor, is_postgres=is_pg)
+                        conn.commit()
+                        print("✅ Árvore de mata-mata atualizada com sucesso no lote atual!")
+                    except Exception as e:
+                        conn.rollback()
+                        print(f"❌ Erro crítico ao atualizar o chaveamento: {e}")
             else:
                 flash('Erro: Você precisa digitar os gols antes de encerrar!')
                 
