@@ -242,23 +242,8 @@ def atualizar_chaveamento_completo(cursor, is_postgres=False):
                 return lista_times[pos]
         return "A definir"
 
-    # Fase 16-avos (Jogos 73 a 88)
-    novos_confrontos['Jogo_73'] = (resolver_posicao_direta('2A'), resolver_posicao_direta('2B'))
-    novos_confrontos['Jogo_74'] = (resolver_posicao_direta('1E'), t3_74 or "A definir")
-    novos_confrontos['Jogo_75'] = (resolver_posicao_direta('1F'), resolver_posicao_direta('2C'))
-    novos_confrontos['Jogo_76'] = (resolver_posicao_direta('1C'), resolver_posicao_direta('2F'))
-    novos_confrontos['Jogo_77'] = (resolver_posicao_direta('1I'), t3_77 or "A definir")
-    novos_confrontos['Jogo_78'] = (resolver_posicao_direta('2E'), resolver_posicao_direta('2I'))
-    novos_confrontos['Jogo_79'] = (resolver_posicao_direta('1A'), t3_79 or "A definir")
-    novos_confrontos['Jogo_80'] = (resolver_posicao_direta('1L'), t3_80 or "A definir")
-    novos_confrontos['Jogo_81'] = (resolver_posicao_direta('1D'), t3_81 or "A definir")
-    novos_confrontos['Jogo_82'] = (resolver_posicao_direta('1G'), t3_82 or "A definir")
-    novos_confrontos['Jogo_83'] = (resolver_posicao_direta('2K'), resolver_posicao_direta('2L'))
-    novos_confrontos['Jogo_84'] = (resolver_posicao_direta('1H'), resolver_posicao_direta('2J'))
-    novos_confrontos['Jogo_85'] = (resolver_posicao_direta('1B'), t3_85 or "A definir")
-    novos_confrontos['Jogo_86'] = (resolver_posicao_direta('1J'), resolver_posicao_direta('2H'))
-    novos_confrontos['Jogo_87'] = (resolver_posicao_direta('1K'), t3_87 or "A definir")
-    novos_confrontos['Jogo_88'] = (resolver_posicao_direta('2D'), resolver_posicao_direta('2G'))
+    # Fase 16-avos (Jogos 73 a 88): confrontos fixados manualmente conforme tabela oficial da FIFA.
+    # NÃO recalcular automaticamente — os times já estão gravados no banco e não devem ser sobrescritos.
 
     # Auxiliar para buscar vencedores/perdedores das fases em cascata
     def obter_vencedor_ou_perdedor(id_partida, buscar_vencedor=True):
