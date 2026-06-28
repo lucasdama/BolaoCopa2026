@@ -170,17 +170,22 @@ def inicializar_db():
                 cidade TEXT
             )
         ''')
-    # Migração: adiciona coluna 'ativo' caso ainda não exista
-    try:
-        cursor.execute("ALTER TABLE usuarios ADD COLUMN ativo INTEGER DEFAULT 1")
-    except Exception:
-        pass  # coluna já existe
+    # Migrações DDL: cada ALTER TABLE usa SAVEPOINT próprio no PostgreSQL para evitar
+    # que a falha de uma migração (coluna já existe) aborte a transação e impeça as demais.
+    is_pg = os.environ.get('DATABASE_URL')
 
-    # Migração: adiciona coluna 'vencedor_penaltis' para desempate em fases eliminatórias
-    try:
-        cursor.execute("ALTER TABLE jogos ADD COLUMN vencedor_penaltis TEXT")
-    except Exception:
-        pass  # coluna já existe
+    def migrar_coluna(sql):
+        if is_pg:
+            cursor.execute("SAVEPOINT sp_migra")
+        try:
+            cursor.execute(sql)
+        except Exception:
+            if is_pg:
+                cursor.execute("ROLLBACK TO SAVEPOINT sp_migra")
+            # SQLite ignora erros via pass; a transação continua normalmente
+
+    migrar_coluna("ALTER TABLE usuarios ADD COLUMN ativo INTEGER DEFAULT 1")
+    migrar_coluna("ALTER TABLE jogos ADD COLUMN vencedor_penaltis TEXT")
 
     conn.commit()
     conn.close()
