@@ -313,7 +313,7 @@
                     {# 🎯 EXIBIÇÃO DETALHADA DO QUE FOI ACERTADO #}
                     {% if jogo['status'] == 'Encerrado' and jogo['gols_time1_palpite'] is not none %}
                     <div class="container-badges-pontos">
-                        <span class="badge-bonus badge-faturados">+{{ jogo['pontos_faturados'] }} pts faturados</span>
+                        <span class="badge-bonus badge-faturados">+{{ "%g" % jogo['pontos_faturados'] }} pts faturados</span>
                         
                         {% if jogo['acertou_placar'] %}
                             <span class="badge-bonus badge-placar">🎯 Placar Exato</span>

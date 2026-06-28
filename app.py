@@ -5,7 +5,7 @@ import psycopg2
 import re
 from psycopg2.extras import DictCursor
 from datetime import datetime, timedelta
-from pontuacao import calcular_pontos
+from pontuacao import calcular_pontos, multiplicador_da_fase
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask import jsonify, session
 from chaveamento import atualizar_chaveamento_completo
@@ -329,24 +329,27 @@ def palpites():
                 g2_real = int(jogo['gols_time2_real'])
                 g1_palp = int(jogo['gols_time1_palpite'])
                 g2_palp = int(jogo['gols_time2_palpite'])
-                
+
+                pontos_base = 0
                 if g1_real == g1_palp and g2_real == g2_palp:
                     jogo['acertou_placar'] = True
-                    jogo['pontos_faturados'] = 10
+                    pontos_base = 10
                 else:
                     venc_real = "t1" if g1_real > g2_real else "t2" if g2_real > g1_real else "empate"
                     venc_palp = "t1" if g1_palp > g2_palp else "t2" if g2_palp > g1_palp else "empate"
-                    
+
                     if venc_real == venc_palp:
                         jogo['acertou_vencedor'] = True
-                        jogo['pontos_faturados'] += 5
+                        pontos_base += 5
                         if (g1_real - g2_real) == (g1_palp - g2_palp):
                             jogo['bonus_saldo'] = True
-                            jogo['pontos_faturados'] += 2
-                            
+                            pontos_base += 2
+
                     if g1_real == g1_palp or g2_real == g2_palp:
                         jogo['bonus_gols'] = True
-                        jogo['pontos_faturados'] += 1
+                        pontos_base += 1
+
+                jogo['pontos_faturados'] = pontos_base * multiplicador_da_fase(jogo['etapa'])
             except (ValueError, TypeError):
                 pass
 
@@ -383,13 +386,13 @@ def ranking():
     for p in todos_palpites:
         jogo_id = p['jogo_id']
         usr_id = p['usuario_id']
-        
+
         if jogo_id in mapa_jogos and usr_id in tabela_pontos:
             jogo = mapa_jogos[jogo_id]
-            
+
             if jogo['gols_time1_real'] is None or jogo['gols_time2_real'] is None:
                 continue
-                
+
             try:
                 g1_real = int(jogo['gols_time1_real'])
                 g2_real = int(jogo['gols_time2_real'])
@@ -397,24 +400,9 @@ def ranking():
                 g2_palp = int(p['gols_time2'])
             except (ValueError, TypeError):
                 continue
-            
-            pontos_do_palpite = 0
-            
-            if g1_real == g1_palp and g2_real == g2_palp:
-                pontos_do_palpite = 10
-            else:
-                venc_real = "t1" if g1_real > g2_real else "t2" if g2_real > g1_real else "empate"
-                venc_palp = "t1" if g1_palp > g2_palp else "t2" if g2_palp > g1_palp else "empate"
-                
-                if venc_real == venc_palp:
-                    pontos_do_palpite += 5
-                    if (g1_real - g2_real) == (g1_palp - g2_palp):
-                        pontos_do_palpite += 2
-                        
-                if g1_real == g1_palp or g2_real == g2_palp:
-                    pontos_do_palpite += 1
-                    
-            tabela_pontos[usr_id]['pontos'] += pontos_do_palpite
+
+            mult = multiplicador_da_fase(jogo['etapa'])
+            tabela_pontos[usr_id]['pontos'] += calcular_pontos(g1_real, g2_real, g1_palp, g2_palp) * mult
 
     ranking_ordenado = list(tabela_pontos.values())
     ranking_ordenado.sort(key=lambda x: x['pontos'], reverse=True)
@@ -665,11 +653,13 @@ def comparativo():
             acerto = None
             if encerrado:
                 try:
-                    pontos = _pts(
+                    pts_base = _pts(
                         int(jogo['gols_time1_real']), int(jogo['gols_time2_real']),
                         int(g1p), int(g2p)
                     )
-                    acerto = 'exato' if pontos == 10 else ('vencedor' if pontos >= 5 else 'errou')
+                    mult = multiplicador_da_fase(jogo['etapa'])
+                    pontos = pts_base * mult
+                    acerto = 'exato' if pts_base == 10 else ('vencedor' if pts_base >= 5 else 'errou')
                     pontos_totais[uid] += pontos
                 except (ValueError, TypeError):
                     pass
@@ -796,22 +786,22 @@ def evolucao_pontos():
 
     # 2. 🔎 IDENTIFICAÇÃO DO TOP 3 REAL USANDO A SUA REGRA
     cursor.execute('''
-        SELECT u.id, j.gols_time1_real, j.gols_time2_real, p.gols_time1, p.gols_time2 
-        FROM usuarios u 
-        JOIN palpites p ON u.id = p.usuario_id 
-        JOIN jogos j ON p.jogo_id = j.jogo_id 
+        SELECT u.id, j.gols_time1_real, j.gols_time2_real, p.gols_time1, p.gols_time2, j.etapa
+        FROM usuarios u
+        JOIN palpites p ON u.id = p.usuario_id
+        JOIN jogos j ON p.jogo_id = j.jogo_id
         WHERE j.status = 'Encerrado'
     ''')
     todos_palpites_ranking = cursor.fetchall()
 
     pontos_dict = {int(user[0]): 0 for user in todos_usuarios_bruto}
-    for u_id_bruto, g1_r, g2_r, g1_p, g2_p in todos_palpites_ranking:
+    for u_id_bruto, g1_r, g2_r, g1_p, g2_p, etapa in todos_palpites_ranking:
         u_id = int(u_id_bruto)
         try:
             g1_r, g2_r, g1_p, g2_p = int(g1_r), int(g2_r), int(g1_p), int(g2_p)
         except (ValueError, TypeError):
             continue
-        pontos_dict[u_id] += calcular_pontos_oficial(g1_r, g2_r, g1_p, g2_p)
+        pontos_dict[u_id] += calcular_pontos_oficial(g1_r, g2_r, g1_p, g2_p) * multiplicador_da_fase(etapa)
 
     lista_usuarios = []
     for user_bruto in todos_usuarios_bruto:
@@ -844,18 +834,18 @@ def evolucao_pontos():
     placeholders_in = ','.join(['%s' if is_postgres else '?' for _ in ids_busca])
     
     query_palpites = f'''
-        SELECT p.usuario_id, j.jogo_id, j.gols_time1_real, j.gols_time2_real, p.gols_time1, p.gols_time2
+        SELECT p.usuario_id, j.jogo_id, j.gols_time1_real, j.gols_time2_real, p.gols_time1, p.gols_time2, j.etapa
         FROM palpites p
         INNER JOIN jogos j ON p.jogo_id = j.jogo_id
         WHERE p.usuario_id IN ({placeholders_in}) AND j.status = 'Encerrado'
     '''
     cursor.execute(query_palpites, tuple(ids_busca))
     todos_palpites = cursor.fetchall()
-    
+
     cursor.execute("SELECT jogo_id FROM jogos WHERE status = 'Encerrado'")
     jogos_encerrados_bruto = cursor.fetchall()
     conn.close()
-    
+
     lista_jogos = [j[0] for j in jogos_encerrados_bruto]
     try:
         lista_jogos.sort(key=lambda x: int(x.split('_')[1]))
@@ -863,32 +853,29 @@ def evolucao_pontos():
         lista_jogos.sort()
 
     palpites_estruturados = {u_id: {} for u_id in ids_busca}
-    for u_id_bruto, jogo_id, g1_r, g2_r, g1_p, g2_p in todos_palpites:
+    for u_id_bruto, jogo_id, g1_r, g2_r, g1_p, g2_p, etapa in todos_palpites:
         u_id = int(u_id_bruto)
         if u_id in palpites_estruturados:
-            palpites_estruturados[u_id][jogo_id] = (g1_r, g2_r, g1_p, g2_p)
+            palpites_estruturados[u_id][jogo_id] = (g1_r, g2_r, g1_p, g2_p, etapa)
 
     # 5. 📉 LOOP DE CONSTRUÇÃO DAS LINHAS
     linhas_grafico = []
-    cores = ['#d97706', '#9ca3af', '#b45309', '#2b7a78'] 
-    
+    cores = ['#d97706', '#9ca3af', '#b45309', '#2b7a78']
+
     for index, u_id in enumerate(ids_busca):
         pontos_acumulados = 0
         pontos_eixo_y = []
-        
+
         for jogo_id in lista_jogos:
             if jogo_id in palpites_estruturados[u_id]:
                 try:
-                    g1_real = int(palpites_estruturados[u_id][jogo_id][0])
-                    g2_real = int(palpites_estruturados[u_id][jogo_id][1])
-                    g1_palpite = int(palpites_estruturados[u_id][jogo_id][2])
-                    g2_palpite = int(palpites_estruturados[u_id][jogo_id][3])
+                    g1_real, g2_real, g1_palpite, g2_palpite, etapa = palpites_estruturados[u_id][jogo_id]
+                    g1_real, g2_real, g1_palpite, g2_palpite = int(g1_real), int(g2_real), int(g1_palpite), int(g2_palpite)
                 except (ValueError, TypeError):
                     pontos_eixo_y.append(pontos_acumulados)
                     continue
 
-                # Aplica exatamente a mesma regra oficial
-                pontos_da_partida = calcular_pontos_oficial(g1_real, g2_real, g1_palpite, g2_palpite)
+                pontos_da_partida = calcular_pontos_oficial(g1_real, g2_real, g1_palpite, g2_palpite) * multiplicador_da_fase(etapa)
                 pontos_acumulados += pontos_da_partida
             
             pontos_eixo_y.append(pontos_acumulados)
@@ -938,17 +925,17 @@ def evolucao_pontos_completo():
     todos_usuarios = cursor.fetchall()
 
     cursor.execute('''
-        SELECT p.usuario_id, j.jogo_id, j.gols_time1_real, j.gols_time2_real, p.gols_time1, p.gols_time2
+        SELECT p.usuario_id, j.jogo_id, j.gols_time1_real, j.gols_time2_real, p.gols_time1, p.gols_time2, j.etapa
         FROM palpites p
         INNER JOIN jogos j ON p.jogo_id = j.jogo_id
         WHERE j.status = 'Encerrado'
     ''')
     todos_palpites = cursor.fetchall()
-    
+
     cursor.execute("SELECT jogo_id FROM jogos WHERE status = 'Encerrado'")
     jogos_encerrados_bruto = cursor.fetchall()
     conn.close()
-    
+
     lista_jogos = [j[0] for j in jogos_encerrados_bruto]
     try:
         lista_jogos.sort(key=lambda x: int(x.split('_')[1]))
@@ -956,14 +943,14 @@ def evolucao_pontos_completo():
         lista_jogos.sort()
 
     palpites_estruturados = {int(u[0]): {} for u in todos_usuarios}
-    for u_id_bruto, jogo_id, g1_r, g2_r, g1_p, g2_p in todos_palpites:
+    for u_id_bruto, jogo_id, g1_r, g2_r, g1_p, g2_p, etapa in todos_palpites:
         u_id = int(u_id_bruto)
         if u_id in palpites_estruturados:
-            palpites_estruturados[u_id][jogo_id] = (g1_r, g2_r, g1_p, g2_p)
+            palpites_estruturados[u_id][jogo_id] = (g1_r, g2_r, g1_p, g2_p, etapa)
 
     # Lista de cores dinâmicas para o gráfico não repetir cores iguais lado a lado
     paleta_cores = [
-        '#2b7a78', '#d97706', '#3b82f6', '#10b981', '#ef4444', '#8b5cf6', 
+        '#2b7a78', '#d97706', '#3b82f6', '#10b981', '#ef4444', '#8b5cf6',
         '#ec4899', '#f59e0b', '#6366f1', '#14b8a6', '#a855f7', '#06b6d4'
     ]
 
@@ -972,19 +959,17 @@ def evolucao_pontos_completo():
         u_id = int(u_id_bruto)
         pontos_acumulados = 0
         pontos_eixo_y = []
-        
+
         for jogo_id in lista_jogos:
             if jogo_id in palpites_estruturados[u_id]:
                 try:
-                    g1_real = int(palpites_estruturados[u_id][jogo_id][0])
-                    g2_real = int(palpites_estruturados[u_id][jogo_id][1])
-                    g1_palpite = int(palpites_estruturados[u_id][jogo_id][2])
-                    g2_palpite = int(palpites_estruturados[u_id][jogo_id][3])
+                    g1_real, g2_real, g1_palpite, g2_palpite, etapa = palpites_estruturados[u_id][jogo_id]
+                    g1_real, g2_real, g1_palpite, g2_palpite = int(g1_real), int(g2_real), int(g1_palpite), int(g2_palpite)
                 except (ValueError, TypeError):
                     pontos_eixo_y.append(pontos_acumulados)
                     continue
 
-                pontos_acumulados += calcular_pontos_oficial(g1_real, g2_real, g1_palpite, g2_palpite)
+                pontos_acumulados += calcular_pontos_oficial(g1_real, g2_real, g1_palpite, g2_palpite) * multiplicador_da_fase(etapa)
             
             pontos_eixo_y.append(pontos_acumulados)
             

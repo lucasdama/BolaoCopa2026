@@ -268,7 +268,7 @@
                                 <div class="palpite-placar {{ p['acerto'] }}">
                                     {{ p['g1'] }} x {{ p['g2'] }}
                                     <div class="palpite-pts">
-                                        {% if p['pontos'] == 10 %}⭐ 10{% else %}{{ p['pontos'] if p['pontos'] else 0 }}{% endif %} pts
+                                        {% if p['acerto'] == 'exato' %}⭐ {{ "%g" % p['pontos'] }}{% else %}{{ "%g" % p['pontos'] if p['pontos'] else 0 }}{% endif %} pts
                                     </div>
                                 </div>
                             {% else %}

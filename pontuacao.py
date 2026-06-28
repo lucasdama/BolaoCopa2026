@@ -1,3 +1,18 @@
+MULTIPLICADORES_FASE = {
+    'Dezesseis-avos de final':    1.5,
+    'Oitavas de final':           2.0,
+    'Quartas de final':           2.5,
+    'Semifinais':                 3.5,
+    'Disputa de terceiro lugar':  3.5,
+    'Final':                      5.0,
+}
+
+def multiplicador_da_fase(etapa):
+    if not etapa or etapa.startswith('Fase de Grupos'):
+        return 1.0
+    return MULTIPLICADORES_FASE.get(etapa, 1.0)
+
+
 def calcular_pontos(gols_time1_real, gols_time2_real, gols_time1_palpite, gols_time2_palpite):
     pontos = 0
     
