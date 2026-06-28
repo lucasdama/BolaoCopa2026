@@ -19,6 +19,7 @@
         
         .btn-encerrar { width: 100%; padding: 10px; background-color: #d9534f; color: white; border: none; cursor: pointer; font-size: 14px; border-radius: 4px; font-weight: bold;}
         .btn-iniciar { width: 100%; padding: 8px; background-color: #f0ad4e; color: white; border: none; cursor: pointer; font-size: 13px; border-radius: 4px; font-weight: bold; margin-bottom: 10px;}
+        .btn-reabrir { width: 100%; padding: 8px; background-color: #5a67d8; color: white; border: none; cursor: pointer; font-size: 13px; border-radius: 4px; font-weight: bold; margin-bottom: 10px;}
         button:hover { opacity: 0.9; }
         
         .status { font-size: 12px; font-weight: bold; color: #4a5568; padding: 3px 8px; background: #e2e8f0; border-radius: 12px; }
@@ -59,6 +60,14 @@
                     <input type="hidden" name="jogo_id" value="{{ jogo['jogo_id'] }}">
                     <input type="hidden" name="acao" value="iniciar">
                     <button type="submit" class="btn-iniciar">🚀 Iniciar Partida (Bloquear Palpites)</button>
+                </form>
+                {% endif %}
+
+                {% if jogo['status'] == 'Em Andamento' %}
+                <form method="POST" onsubmit="return confirm('Reabrir esta partida para palpites? O fechamento automático voltará a agir no horário correto.')">
+                    <input type="hidden" name="jogo_id" value="{{ jogo['jogo_id'] }}">
+                    <input type="hidden" name="acao" value="reabrir">
+                    <button type="submit" class="btn-reabrir">🔓 Reabrir para Palpites (desfazer fechamento)</button>
                 </form>
                 {% endif %}
                 

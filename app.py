@@ -5,6 +5,10 @@ import psycopg2
 import re
 from psycopg2.extras import DictCursor
 from datetime import datetime, timedelta
+from datetime import timezone
+
+# Brasil aboliu horário de verão em 2019; BRT = UTC-3 fixo.
+TIMEZONE_BRASILIA = timezone(timedelta(hours=-3))
 from pontuacao import calcular_pontos, multiplicador_da_fase
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask import jsonify, session
@@ -54,7 +58,9 @@ _ultimo_check_auto_inicio = datetime.min
 def auto_iniciar_partidas():
     """Verifica partidas 'Pendente' cujo horário já passou e as marca como 'Em Andamento'."""
     global _ultimo_check_auto_inicio
-    agora = datetime.now()
+    # Usa horário de Brasília (America/Sao_Paulo) para comparar com data_hora salva em BRT.
+    # O servidor Render roda em UTC; sem essa conversão, datetime.now() estaria 3h adiantado.
+    agora = datetime.now(TIMEZONE_BRASILIA).replace(tzinfo=None)
 
     # Só verifica uma vez por minuto para não bater no banco a cada request
     if (agora - _ultimo_check_auto_inicio).total_seconds() < 60:
@@ -514,6 +520,14 @@ def admin():
             else:
                 flash('Erro: Você precisa digitar os gols antes de encerrar!')
                 
+        elif acao == 'reabrir':
+            # Volta a partida para Pendente sem apagar palpites existentes.
+            # O fechamento automático voltará a agir normalmente quando o horário real chegar.
+            query_reabrir = preparar_query("UPDATE jogos SET status = 'Pendente' WHERE jogo_id = ?")
+            cursor.execute(query_reabrir, (jogo_id,))
+            print(f"🔓 Partida {jogo_id} reaberta para palpites pelo admin.")
+            flash('Partida reaberta! Palpites liberados novamente.')
+
         # 💾 O commit agora salva o placar DO JOGO + O CHAVEAMENTO recalculado juntos!
         conn.commit()
         conn.close()
