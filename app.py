@@ -1275,6 +1275,40 @@ def api_dashboard():
             'total':          tot,
         })
 
+    # Acertos comparativo: exatos e vencedores por jogador (mutuamente exclusivos)
+    acertos_jogadores = []
+    for u in usuarios:
+        exatos = 0
+        vencedores = 0
+        total_pal = 0
+        total_pts = 0.0
+        for j in jogos:
+            pal = mapa.get(u['id'], {}).get(j['jogo_id'])
+            if pal is None:
+                continue
+            try:
+                pts, tipo = _pts_tipo(j['gols_time1_real'], j['gols_time2_real'], pal[0], pal[1])
+            except (ValueError, TypeError):
+                continue
+            total_pal += 1
+            total_pts += pts * multiplicador_da_fase(j['etapa'])
+            if tipo == 'exato':
+                exatos += 1
+            elif tipo == 'vencedor':
+                vencedores += 1
+        acertos_jogadores.append({
+            'login': u['login'],
+            'exatos': exatos,
+            'vencedores': vencedores,
+            'total_palpites': total_pal,
+            'total_pts': round(total_pts, 1),
+        })
+
+    # Posição no ranking geral (por pontos com multiplicador)
+    sorted_pts = sorted(acertos_jogadores, key=lambda x: x['total_pts'], reverse=True)
+    for i, u_a in enumerate(sorted_pts):
+        u_a['pos_ranking'] = i + 1
+
     return jsonify({
         'individual': {
             'taxa_geral':  taxa,
@@ -1288,6 +1322,7 @@ def api_dashboard():
             'heatmap':        {'jogos': hm_labels, 'linhas': hm_linhas},
             'azarao':         azarao[:8],
             'palpites_comuns': list(reversed(palpites_comuns)),  # mais recente primeiro
+            'acertos':        acertos_jogadores,
         }
     })
 

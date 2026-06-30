@@ -236,6 +236,33 @@
             text-align: right; font-weight: 600;
         }
         .pc-divider { border: none; border-top: 1px solid #f3f4f6; margin: 14px 0; }
+
+        /* ── Ranking de Acertos ── */
+        .rank-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        .rank-table th {
+            text-align: left; padding: 6px 8px;
+            border-bottom: 2px solid #e5e7eb;
+            font-weight: 700; color: #374151; font-size: 11px;
+        }
+        .rank-table td { padding: 7px 8px; border-bottom: 1px solid #f3f4f6; vertical-align: middle; }
+        .rank-table tr:last-child td { border-bottom: none; }
+        .rank-pos {
+            font-weight: 900; font-size: 14px; color: #9ca3af;
+            width: 24px; text-align: center;
+        }
+        .rank-pos.top1 { color: #d97706; }
+        .rank-pos.top2 { color: #6b7280; }
+        .rank-pos.top3 { color: #92400e; }
+        .rank-login { font-weight: 700; color: #111827; }
+        .rank-badge-exato    { background: #dcfce7; color: #166534; }
+        .rank-badge-vencedor { background: #fef3c7; color: #92400e; }
+        .rank-badge {
+            display: inline-block; font-weight: 900; font-size: 15px;
+            padding: 2px 10px; border-radius: 20px; min-width: 40px; text-align: center;
+        }
+        .rank-meta { font-size: 10px; color: #6b7280; }
+        .rank-geral { font-size: 11px; color: #6b7280; white-space: nowrap; }
+        .chart-wrap.h280 { height: 280px; }
     </style>
 </head>
 <body>
@@ -341,6 +368,32 @@
             <h3>📌 Palpites Mais Comuns</h3>
             <p style="font-size:12px;color:#6b7280;margin:-8px 0 12px;">Últimos 10 jogos encerrados.</p>
             <div id="palpitesComuns"></div>
+        </div>
+    </div>
+
+    <!-- ════════════════════ COMPARATIVO DE ACERTOS ════════════════════ -->
+    <div class="section-title">🏹 Comparativo de Acertos</div>
+
+    <div class="grid-2">
+        <!-- Ranking Placares Exatos -->
+        <div class="card">
+            <h3>🎯 Ranking de Placares Exatos</h3>
+            <div id="rankingExatos"></div>
+        </div>
+
+        <!-- Ranking Vencedores -->
+        <div class="card">
+            <h3>✅ Ranking de Vencedores Acertados</h3>
+            <div id="rankingVencedores"></div>
+        </div>
+    </div>
+
+    <!-- Gráfico de dispersão exatos × vencedores -->
+    <div class="card-full">
+        <h3>Mapa de Estilo de Acerto <span style="font-size:11px;font-weight:400;color:#6b7280;">— Exatos (eixo Y) × Vencedores (eixo X)</span></h3>
+        <p style="font-size:12px;color:#6b7280;margin:-8px 0 12px;">Certeiro = muitos exatos · Consistente = muitos vencedores · Completo = alto nos dois eixos.</p>
+        <div class="chart-wrap h280">
+            <canvas id="chartAcertos"></canvas>
         </div>
     </div>
 
@@ -555,6 +608,7 @@ function renderColetivo(d) {
     renderHeatmap(d.heatmap);
     renderAzarao(d.azarao);
     renderPalpitesComuns(d.palpites_comuns);
+    renderAcertos(d.acertos || []);
 }
 
 function renderHeatmap(hm) {
@@ -602,6 +656,120 @@ function renderAzarao(lista) {
             <div class="azarao-pct">${a.pct_erro}%</div>
         </div>`
     ).join('');
+}
+
+function renderAcertos(jogadores) {
+    if (!jogadores.length) return;
+
+    function pct(n, total) {
+        return total ? (n / total * 100).toFixed(0) + '%' : '—';
+    }
+    function posEmoji(i) {
+        return ['🥇','🥈','🥉'][i] || (i + 1) + '°';
+    }
+    function posClass(i) {
+        return i === 0 ? 'top1' : i === 1 ? 'top2' : i === 2 ? 'top3' : '';
+    }
+
+    // ── Ranking Placares Exatos ──
+    const porExatos = [...jogadores].sort((a, b) => b.exatos - a.exatos);
+    const elEx = document.getElementById('rankingExatos');
+    elEx.innerHTML = `
+        <table class="rank-table">
+            <thead><tr>
+                <th>#</th><th>Jogador</th>
+                <th style="text-align:center">Exatos</th>
+                <th style="text-align:right">% / Rank</th>
+            </tr></thead>
+            <tbody>
+            ${porExatos.map((u, i) => `
+                <tr>
+                    <td class="rank-pos ${posClass(i)}">${posEmoji(i)}</td>
+                    <td class="rank-login">${u.login}</td>
+                    <td style="text-align:center">
+                        <span class="rank-badge rank-badge-exato">${u.exatos}</span>
+                    </td>
+                    <td style="text-align:right">
+                        <div class="rank-meta">${pct(u.exatos, u.total_palpites)} dos palpites</div>
+                        <div class="rank-geral">Rank geral: ${u.pos_ranking}°</div>
+                    </td>
+                </tr>`).join('')}
+            </tbody>
+        </table>`;
+
+    // ── Ranking Vencedores ──
+    const porVenc = [...jogadores].sort((a, b) => b.vencedores - a.vencedores);
+    const elVn = document.getElementById('rankingVencedores');
+    elVn.innerHTML = `
+        <table class="rank-table">
+            <thead><tr>
+                <th>#</th><th>Jogador</th>
+                <th style="text-align:center">Vencedores</th>
+                <th style="text-align:right">% / Rank</th>
+            </tr></thead>
+            <tbody>
+            ${porVenc.map((u, i) => `
+                <tr>
+                    <td class="rank-pos ${posClass(i)}">${posEmoji(i)}</td>
+                    <td class="rank-login">${u.login}</td>
+                    <td style="text-align:center">
+                        <span class="rank-badge rank-badge-vencedor">${u.vencedores}</span>
+                    </td>
+                    <td style="text-align:right">
+                        <div class="rank-meta">${pct(u.vencedores, u.total_palpites)} dos palpites</div>
+                        <div class="rank-geral">Rank geral: ${u.pos_ranking}°</div>
+                    </td>
+                </tr>`).join('')}
+            </tbody>
+        </table>`;
+
+    // ── Gráfico de dispersão ──
+    const pontos = jogadores.map((u, i) => ({
+        x: u.vencedores,
+        y: u.exatos,
+        login: u.login,
+    }));
+
+    new Chart(document.getElementById('chartAcertos'), {
+        type: 'scatter',
+        data: {
+            datasets: pontos.map((p, i) => ({
+                label: p.login,
+                data: [{ x: p.x, y: p.y }],
+                backgroundColor: PALETTE[i % PALETTE.length] + 'cc',
+                borderColor:     PALETTE[i % PALETTE.length],
+                borderWidth: 2,
+                pointRadius: 10,
+                pointHoverRadius: 13,
+            }))
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: {
+                legend: { position: 'right', labels: { boxWidth: 10, font: { size: 11 } } },
+                tooltip: {
+                    callbacks: {
+                        label: ctx => {
+                            const d = ctx.raw;
+                            return ` ${ctx.dataset.label}: ${d.y} exatos · ${d.x} vencedores`;
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    title: { display: true, text: 'Vencedores acertados', font: { size: 11 } },
+                    beginAtZero: true, ticks: { stepSize: 1 },
+                    grid: { color: '#f3f4f6' },
+                },
+                y: {
+                    title: { display: true, text: 'Placares exatos', font: { size: 11 } },
+                    beginAtZero: true, ticks: { stepSize: 1 },
+                    grid: { color: '#f3f4f6' },
+                }
+            }
+        }
+    });
 }
 
 function renderPalpitesComuns(lista) {
