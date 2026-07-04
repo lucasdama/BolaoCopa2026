@@ -643,10 +643,16 @@ def comparativo():
     cursor.execute("SELECT id, login FROM usuarios ORDER BY login ASC")
     usuarios = [dict(u) for u in cursor.fetchall()]
 
-    query_jogos = preparar_query(
-        "SELECT * FROM jogos WHERE status != 'Pendente' ORDER BY data_hora ASC"
-    )
-    cursor.execute(query_jogos)
+    # data_hora é texto dd/mm/aaaa: ordenar por ela mistura os meses (01/07 < 28/06).
+    # Mesmo critério do admin: grupos por data (todas em junho), mata-mata por número do jogo.
+    cursor.execute('''
+        SELECT * FROM jogos
+        WHERE status != 'Pendente'
+        ORDER BY
+            CASE WHEN etapa LIKE 'Fase de Grupos%' THEN etapa ELSE 'Mata-Mata' END ASC,
+            CASE WHEN etapa LIKE 'Fase de Grupos%' THEN data_hora ELSE '' END ASC,
+            CAST(SUBSTR(jogo_id, 6) AS INTEGER) ASC
+    ''')
     jogos_raw = cursor.fetchall()
 
     cursor.execute("SELECT * FROM palpites")
@@ -1062,11 +1068,15 @@ def api_dashboard():
     cursor.execute("SELECT id, login FROM usuarios ORDER BY login ASC")
     usuarios = [dict(u) for u in cursor.fetchall()]
 
-    q_jogos = preparar_query(
-        "SELECT * FROM jogos WHERE status = 'Encerrado' AND gols_time1_real IS NOT NULL "
-        "ORDER BY data_hora ASC"
-    )
-    cursor.execute(q_jogos)
+    # data_hora é texto dd/mm/aaaa: ordenar por ela mistura os meses (01/07 < 28/06).
+    cursor.execute('''
+        SELECT * FROM jogos
+        WHERE status = 'Encerrado' AND gols_time1_real IS NOT NULL
+        ORDER BY
+            CASE WHEN etapa LIKE 'Fase de Grupos%' THEN etapa ELSE 'Mata-Mata' END ASC,
+            CASE WHEN etapa LIKE 'Fase de Grupos%' THEN data_hora ELSE '' END ASC,
+            CAST(SUBSTR(jogo_id, 6) AS INTEGER) ASC
+    ''')
     jogos = [dict(j) for j in cursor.fetchall()]
 
     cursor.execute("SELECT * FROM palpites")
