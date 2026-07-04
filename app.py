@@ -464,7 +464,8 @@ def admin():
 
             FASES_ELIMINATORIAS = {
                 'Dezesseis-avos de final', 'Oitavas de final',
-                'Quartas de final', 'Semifinais', 'Final'
+                'Quartas de final', 'Semifinais',
+                'Disputa de terceiro lugar', 'Final'
             }
 
             if gols_t1 is not None and gols_t2 is not None and gols_t1.strip() != '' and gols_t2.strip() != '':

@@ -243,7 +243,8 @@ def atualizar_chaveamento_completo(cursor, is_postgres=False):
                 return lista_times[pos]
         return "A definir"
 
-    # Fase 16-avos (Jogos 73 a 88): confrontos fixados manualmente conforme tabela oficial da FIFA.
+    # Fase 16-avos (Jogos 73 a 88) e Oitavas (Jogos 89 a 96): confrontos fixados manualmente
+    # conforme tabela oficial da FIFA (ver corrigir_chaveamento_oitavas_prod.py).
     # NÃO recalcular automaticamente — os times já estão gravados no banco e não devem ser sobrescritos.
 
     # Auxiliar para buscar vencedores/perdedores das fases em cascata
@@ -269,15 +270,15 @@ def atualizar_chaveamento_completo(cursor, is_postgres=False):
                 return match['time2'] if vp == match['time1'] else match['time1']
             return match['time2']
 
+    # Chave oficial a partir das Quartas. Jogo_103 (3º lugar) recebe os PERDEDORES das semis.
     estrutura_fluxo = {
-        'Jogo_89': ('Jogo_74', 'Jogo_77'), 'Jogo_90': ('Jogo_73', 'Jogo_75'),
-        'Jogo_91': ('Jogo_76', 'Jogo_78'), 'Jogo_92': ('Jogo_79', 'Jogo_80'),
-        'Jogo_93': ('Jogo_83', 'Jogo_84'), 'Jogo_94': ('Jogo_81', 'Jogo_82'),
-        'Jogo_95': ('Jogo_86', 'Jogo_88'), 'Jogo_96': ('Jogo_85', 'Jogo_87'),
-        'Jogo_97': ('Jogo_89', 'Jogo_90'), 'Jogo_98': ('Jogo_93', 'Jogo_94'),
-        'Jogo_99': ('Jogo_91', 'Jogo_92'), 'Jogo_100': ('Jogo_95', 'Jogo_96'),
-        'Jogo_101': ('Jogo_97', 'Jogo_98'), 'Jogo_102': ('Jogo_99', 'Jogo_100'),
-        'Jogo_103': ('Jogo_101', 'Jogo_102'), 
+        'Jogo_97':  ('Jogo_90', 'Jogo_89'),   # Venc (Paraguai x Franca)  x Venc (Canada x Marrocos)
+        'Jogo_98':  ('Jogo_93', 'Jogo_94'),   # Venc (Portugal x Espanha) x Venc (EUA x Belgica)
+        'Jogo_99':  ('Jogo_91', 'Jogo_92'),   # Venc (Brasil x Noruega)   x Venc (Mexico x Inglaterra)
+        'Jogo_100': ('Jogo_95', 'Jogo_96'),   # Venc (Argentina x Egito)  x Venc (Suica x Colombia)
+        'Jogo_101': ('Jogo_97', 'Jogo_98'),
+        'Jogo_102': ('Jogo_99', 'Jogo_100'),
+        'Jogo_103': ('Jogo_101', 'Jogo_102'),
         'Jogo_104': ('Jogo_101', 'Jogo_102')
     }
 

@@ -71,7 +71,7 @@
                 </form>
                 {% endif %}
                 
-                {% set eh_eliminatorio = jogo['etapa'] in ['Dezesseis-avos de final', 'Oitavas de final', 'Quartas de final', 'Semifinais', 'Final'] %}
+                {% set eh_eliminatorio = jogo['etapa'] in ['Dezesseis-avos de final', 'Oitavas de final', 'Quartas de final', 'Semifinais', 'Disputa de terceiro lugar', 'Final'] %}
                 <form method="POST" {% if eh_eliminatorio %}onsubmit="return validarPenaltis(this)"{% endif %}>
                     <input type="hidden" name="jogo_id" value="{{ jogo['jogo_id'] }}">
                     <input type="hidden" name="acao" value="encerrar">
